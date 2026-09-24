@@ -1,7 +1,6 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-
-const BACKEND_API_URL = process.env.BACKEND_API_URL ?? "http://localhost:8000/api/v1";
+import { BACKEND_API_URL } from "@/lib/backend";
 
 // Streams a multipart upload from the browser on to the backend with the signed-in
 // user's token — never buffered in full. Upload routes use this instead of server

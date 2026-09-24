@@ -1,7 +1,6 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-
-const BACKEND_API_URL = process.env.BACKEND_API_URL ?? "http://localhost:8000/api/v1";
+import { BACKEND_API_URL } from "@/lib/backend";
 
 class InvalidLoginError extends CredentialsSignin {
   code = "invalid-credentials";

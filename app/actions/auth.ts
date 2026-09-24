@@ -2,8 +2,7 @@
 
 import { AuthError, CredentialsSignin } from "next-auth";
 import { auth, signIn, signOut } from "@/auth";
-
-const BACKEND_API_URL = process.env.BACKEND_API_URL ?? "http://localhost:8000/api/v1";
+import { BACKEND_API_URL } from "@/lib/backend";
 
 export type SignInState = { error?: string } | undefined;
 

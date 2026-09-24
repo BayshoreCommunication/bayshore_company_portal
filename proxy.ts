@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getToken, encode } from "next-auth/jwt";
+import { BACKEND_API_URL } from "@/lib/backend";
 
 const AUTH_ROUTES = ["/sign-in", "/forgot-password"];
-const BACKEND_API_URL = process.env.BACKEND_API_URL ?? "http://localhost:8000/api/v1";
 
 // Refresh a bit before the access token actually expires, so no request ever
 // races an access token that's a few seconds away from dying.
