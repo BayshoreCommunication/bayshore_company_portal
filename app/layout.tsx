@@ -14,8 +14,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Bayshore Client-Portal",
-  description: "Bayshore Client-Portal — manage clients, reports, and content.",
+  // A page can set its own title ("Clients"), shown as "Clients | BayShore Company Portal".
+  title: {
+    default: "BayShore Company Portal",
+    template: "%s | BayShore Company Portal",
+  },
+  description:
+    "BayShore Communication's team portal — manage clients, monthly reports, content approvals, meetings and payments in one place.",
+  applicationName: "BayShore Company Portal",
+  // Staff-only: keep it out of search engines.
+  robots: { index: false, follow: false },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

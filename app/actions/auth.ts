@@ -1,31 +1,49 @@
 "use server";
 
-import { AuthError, CredentialsSignin } from "next-auth";
 import { auth, signIn, signOut } from "@/auth";
 import { BACKEND_API_URL } from "@/lib/backend";
+import { AuthError, CredentialsSignin } from "next-auth";
 
 export type SignInState = { error?: string } | undefined;
 
 export async function signInAction(
   _prevState: SignInState,
-  formData: FormData
+  formData: FormData,
 ): Promise<SignInState> {
   const identifier = formData.get("identifier");
   const password = formData.get("password");
-  const callbackUrl = (formData.get("callbackUrl") as string) || "/dashboard";
 
-  if (typeof identifier !== "string" || typeof password !== "string" || !identifier || !password) {
+  if (
+    typeof identifier !== "string" ||
+    typeof password !== "string" ||
+    !identifier ||
+    !password
+  ) {
     return { error: "Email/phone and password are required." };
   }
 
   try {
-    await signIn("credentials", { identifier, password, redirectTo: callbackUrl });
+    await signIn("credentials", {
+      identifier,
+      password,
+      redirectTo: "/dashboard",
+    });
   } catch (error) {
-    if (error instanceof CredentialsSignin && error.code === "backend-unreachable") {
-      return { error: "Could not reach the server. Please try again in a moment." };
+    if (
+      error instanceof CredentialsSignin &&
+      error.code === "backend-unreachable"
+    ) {
+      return {
+        error: "Could not reach the server. Please try again in a moment.",
+      };
     }
-    if (error instanceof CredentialsSignin && error.code === "account-not-active") {
-      return { error: "Your account is not active. Please contact your administrator." };
+    if (
+      error instanceof CredentialsSignin &&
+      error.code === "account-not-active"
+    ) {
+      return {
+        error: "Your account is not active. Please contact your administrator.",
+      };
     }
     if (error instanceof AuthError) {
       return { error: "Invalid email/phone or password." };
