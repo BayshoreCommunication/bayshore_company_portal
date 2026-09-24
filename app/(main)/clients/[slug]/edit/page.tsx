@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getClientAction } from "@/app/actions/clients";
 import ClientForm from "@/component/clients/ClientForm";
 import { canManageClients } from "@/component/clients/clientUi";
+import { formErrorBanner } from "@/component/shared/ui";
 
 const EditClientPage = async ({ params }: { params: Promise<{ slug: string }> }) => {
   const { slug } = await params;
@@ -13,7 +14,7 @@ const EditClientPage = async ({ params }: { params: Promise<{ slug: string }> })
 
   if (!result.ok || !result.data) {
     return (
-      <div className="form-error-banner" role="alert">
+      <div className={formErrorBanner} role="alert">
         {result.error ?? "Could not load this client."}
       </div>
     );

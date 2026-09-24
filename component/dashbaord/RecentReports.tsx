@@ -1,29 +1,30 @@
 import { recentReports } from "./data";
 import ViewAllLink from "@/component/shared/ViewAllLink";
+import { btnDraft, dashPendingSub, dashPendingTitle, reportRowIcon, sideCard, sideHeader, sideTitle } from "@/component/shared/ui";
 
 const RecentReports = () => {
   return (
-    <div className="side-card">
-      <div className="side-header">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div className="side-title">Recent Reports</div>
+    <div className={sideCard}>
+      <div className={sideHeader}>
+        <div className="flex items-center justify-between">
+          <div className={sideTitle}>Recent Reports</div>
           <ViewAllLink />
         </div>
       </div>
-      <div className="recent-reports-list">
+      <div className="flex flex-col gap-3.5">
         {recentReports.map((report) => (
-          <div className="recent-report-item" key={report.title}>
-            <div
-              className="report-row-icon"
-              style={{ background: report.iconBg, color: report.iconColor }}
-            >
+          <div
+            className="flex items-center gap-2.5 border-b border-[#eef3ef] pb-3.5 last:border-b-0 last:pb-0"
+            key={report.title}
+          >
+            <div className={reportRowIcon} style={{ background: report.iconBg, color: report.iconColor }}>
               <report.icon size={15} strokeWidth={2} />
             </div>
-            <div style={{ flex: 1 }}>
-              <div className="dash-pending-title">{report.title}</div>
-              <div className="dash-pending-sub">{report.detail}</div>
+            <div className="flex-1">
+              <div className={dashPendingTitle}>{report.title}</div>
+              <div className={dashPendingSub}>{report.detail}</div>
             </div>
-            <button className="btn-draft">Read</button>
+            <button className={btnDraft}>Read</button>
           </div>
         ))}
       </div>

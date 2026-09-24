@@ -9,34 +9,20 @@ const FEATURES = [
 
 const AuthBrandPanel = () => {
   return (
-    <div className="auth-brand-panel">
-      <div style={{ fontFamily: "Georgia, serif", fontSize: 30, fontWeight: 700, color: "#fff" }}>
-        BayShore
-      </div>
-      <div style={{ fontSize: 14, color: "#9cb0c3", marginTop: 10, maxWidth: 320, lineHeight: 1.6 }}>
+    <div className="flex max-w-115 flex-[1_1_420px] flex-col justify-center bg-[#0b1522] px-12 py-14 max-[860px]:hidden">
+      <div className="font-[Georgia,serif] text-[30px] font-bold text-white">BayShore</div>
+      <div className="mt-2.5 max-w-80 text-[14px] leading-[1.6] text-[#9cb0c3]">
         The internal workspace for managing every BayShore client relationship, from onboarding to
         renewal.
       </div>
 
-      <div style={{ marginTop: 48, display: "flex", flexDirection: "column", gap: 20 }}>
+      <div className="mt-12 flex flex-col gap-5">
         {FEATURES.map((feature) => (
-          <div key={feature.text} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: 10,
-                background: "rgba(255,255,255,0.06)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#d99136",
-                flexShrink: 0,
-              }}
-            >
+          <div key={feature.text} className="flex items-center gap-3.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-white/6 text-[#d99136]">
               <feature.icon size={17} strokeWidth={2} />
             </div>
-            <span style={{ fontSize: 13.5, color: "#c7d2da" }}>{feature.text}</span>
+            <span className="text-[13.5px] text-[#c7d2da]">{feature.text}</span>
           </div>
         ))}
       </div>

@@ -1,38 +1,33 @@
 import { upcomingMeetings } from "./data";
 import ViewAllLink from "@/component/shared/ViewAllLink";
+import { MINI_STATUS, dashPendingSub, dashPendingTitle, miniStatus, sideCard, sideHeader, sideTitle } from "@/component/shared/ui";
 
 const statusClassName = (status: string) => {
-  if (status === "Today") return "mini-status sent";
-  if (status === "Tomorrow") return "mini-status published";
-  return "mini-status";
+  if (status === "Today") return `${miniStatus} ${MINI_STATUS.sent}`;
+  if (status === "Tomorrow") return `${miniStatus} ${MINI_STATUS.published}`;
+  return miniStatus;
 };
 
 const UpcomingMeetings = () => {
   return (
-    <div className="side-card">
-      <div className="side-header">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div className="side-title">Upcoming Meetings</div>
+    <div className={sideCard}>
+      <div className={sideHeader}>
+        <div className="flex items-center justify-between">
+          <div className={sideTitle}>Upcoming Meetings</div>
           <ViewAllLink />
         </div>
       </div>
-      <div className="dash-meeting-list">
+      <div className="flex flex-col gap-3.5">
         {upcomingMeetings.map((meeting) => (
-          <div className="dash-meeting-item" key={`${meeting.client}-${meeting.day}`}>
-            <div className="dash-meeting-date">
-              <div className="dm-mon">{meeting.month}</div>
-              <div className="dm-day">{meeting.day}</div>
+          <div className="flex items-center gap-3" key={`${meeting.client}-${meeting.day}`}>
+            <div className="flex h-10.5 w-10.5 shrink-0 flex-col items-center justify-center rounded-md bg-[#f6f2eb]">
+              <div className="text-[9px] font-bold tracking-[0.4px] text-[#b91c1c]">{meeting.month}</div>
+              <div className="text-[15px] leading-[1.1] font-bold text-[#17242f]">{meeting.day}</div>
             </div>
-            <div
-              style={
-                meeting.status
-                  ? { flex: 1, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }
-                  : undefined
-              }
-            >
+            <div className={meeting.status ? "flex flex-1 items-start justify-between" : undefined}>
               <div>
-                <div className="dash-pending-title">{meeting.client}</div>
-                <div className="dash-pending-sub">{meeting.detail}</div>
+                <div className={dashPendingTitle}>{meeting.client}</div>
+                <div className={dashPendingSub}>{meeting.detail}</div>
               </div>
               {meeting.status ? (
                 <span className={statusClassName(meeting.status)}>{meeting.status}</span>

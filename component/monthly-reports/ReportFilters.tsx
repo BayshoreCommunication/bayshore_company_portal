@@ -3,6 +3,15 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
+import {
+  filterLeftGroup,
+  filterSearchBox,
+  filterSearchClear,
+  filterSearchIcon,
+  filterSearchInput,
+  filterSelect,
+  filtersCard,
+} from "@/component/shared/ui";
 import { STATUS_OPTIONS, monthOptions, reportsHref } from "./reportUi";
 
 const SEARCH_DELAY_MS = 400;
@@ -48,9 +57,9 @@ const ReportFilters = ({ clients, client, month, status, search }: { clients: { 
   };
 
   return (
-    <div className="filters-card">
-      <div className="filter-left-group">
-        <select className="filter-select" aria-label="Client" value={client} onChange={(event) => go({ client: event.target.value })}>
+    <div className={filtersCard}>
+      <div className={filterLeftGroup}>
+        <select className={filterSelect} aria-label="Client" value={client} onChange={(event) => go({ client: event.target.value })}>
           <option value="">All Clients</option>
           {clients.map((option) => (
             <option key={option._id} value={option._id}>
@@ -58,7 +67,7 @@ const ReportFilters = ({ clients, client, month, status, search }: { clients: { 
             </option>
           ))}
         </select>
-        <select className="filter-select" aria-label="Report month" value={month} onChange={(event) => go({ month: event.target.value })}>
+        <select className={filterSelect} aria-label="Report month" value={month} onChange={(event) => go({ month: event.target.value })}>
           <option value="">All Dates</option>
           {monthOptions(month || undefined).map((option) => (
             <option key={option.value} value={option.value}>
@@ -66,7 +75,7 @@ const ReportFilters = ({ clients, client, month, status, search }: { clients: { 
             </option>
           ))}
         </select>
-        <select className="filter-select" aria-label="Status" value={status} onChange={(event) => go({ status: event.target.value })}>
+        <select className={filterSelect} aria-label="Status" value={status} onChange={(event) => go({ status: event.target.value })}>
           <option value="">All Statuses</option>
           {STATUS_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
@@ -75,13 +84,13 @@ const ReportFilters = ({ clients, client, month, status, search }: { clients: { 
           ))}
         </select>
       </div>
-      <div className="filter-search-box">
-        <span className="filter-search-icon" style={{ display: "inline-flex" }}>
+      <div className={filterSearchBox}>
+        <span className={filterSearchIcon}>
           <Search size={13} strokeWidth={2} />
         </span>
         <input
           type="search"
-          className="filter-search-input"
+          className={filterSearchInput}
           placeholder="Search client or report..."
           aria-label="Search reports"
           autoComplete="off"
@@ -96,7 +105,7 @@ const ReportFilters = ({ clients, client, month, status, search }: { clients: { 
           }}
         />
         {text ? (
-          <button type="button" className="clients-search-clear reports-search-clear" aria-label="Clear search" onClick={() => { setText(""); applySearch(""); }}>
+          <button type="button" className={filterSearchClear} aria-label="Clear search" onClick={() => { setText(""); applySearch(""); }}>
             <X size={13} strokeWidth={2.5} />
           </button>
         ) : null}

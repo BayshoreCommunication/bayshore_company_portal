@@ -4,7 +4,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Camera, Smartphone, Mail, Plus, Check, ChevronDown, X } from "lucide-react";
+import { Camera, Smartphone, Mail, Plus, Check, ChevronDown, Loader2, X } from "lucide-react";
 import {
   changeReportStatusAction,
   createReportAction,
@@ -14,9 +14,38 @@ import {
   type ReportPeriodType,
   type ReportStatus,
 } from "@/app/actions/reports";
-import RoleAlertBanner from "@/component/shared/RoleAlertBanner";
-import { roleLabel } from "@/component/shared/roleLabels";
 import { STATUS_BADGES, canReviewReports, canWriteReports, clientIdOf, clientNameOf, formatDate, formatDateTime, periodLabel } from "./reportUi";
+import {
+  breadcrumbLink,
+  breadcrumbRow,
+  breadcrumbs,
+  btnDraft,
+  contentStack,
+  fieldHintPlain,
+  formErrorBannerBase,
+  headlineRow,
+  inputText,
+  layoutGrid,
+  moreBtn,
+  pageTitle,
+  roleAlertBanner,
+  sectionSub,
+  sectionTitle,
+  sideCard,
+  sideTitle,
+  textareaBase,
+} from "@/component/shared/ui";
+
+const dataTable = "w-full border-collapse text-[12.5px]";
+const dataTh = "px-2 py-1.5 text-left text-[10.5px] font-semibold tracking-[0.6px] text-[#7a8d9b] uppercase";
+const dataTd = "border-b border-[#f2f5f3] px-2 py-1.5";
+const dataTr = "[&:last-child>td]:border-b-0";
+const tableSubtitle = "mb-2 text-[10.5px] font-bold tracking-[0.8px] text-[#7a8d9b] uppercase";
+const inputPill = "w-full rounded-md border border-[#cbd6d0] bg-[#fafcfb] px-2.5 py-1.5 text-[12px] text-[#1a252c]";
+const metaCol = "border-r border-[#edf2ee] px-4.5 py-3 last:border-r-0";
+const metaLbl = "mb-1 text-[10px] font-bold tracking-[0.8px] text-[#7b8e9d] uppercase";
+const metaVal = "text-[13px] font-bold text-[#10212e]";
+const sideNote = "mt-2 text-[11.5px] leading-normal text-[#64748b]";
 
 // ── Form model ──────────────────────────────────────────────────────────────
 
@@ -250,16 +279,14 @@ const SectionCard = ({
   children: ReactNode;
 }) => (
   <div
-    className="report-section-card"
-    style={{
-      padding: 0,
-      overflow: "hidden",
-      borderColor: included ? "#93c5fd" : undefined,
-      boxShadow: included ? "0 0 0 1px #93c5fd" : undefined,
-    }}
+    className={`overflow-hidden rounded-lg border bg-white ${
+      included ? "border-[#93c5fd] shadow-[0_0_0_1px_#93c5fd]" : "border-[#dbe3de]"
+    }`}
   >
     <div
-      className="section-header"
+      className={`flex items-center justify-start gap-2.5 border-b border-[#eef3ef] p-4.5 ${
+        disabled ? "cursor-default" : "cursor-pointer"
+      } ${included ? "bg-[#f5f9ff]" : "bg-white"}`}
       role="button"
       tabIndex={disabled ? -1 : 0}
       aria-expanded={included}
@@ -271,20 +298,20 @@ const SectionCard = ({
           onToggle();
         }
       }}
-      style={{ cursor: disabled ? "default" : "pointer", margin: 0, padding: 18, background: included ? "#f5f9ff" : "#fff" }}
     >
       <div
-        className={`check-icon toggleable${included ? "" : " unchecked"}`}
-        style={!included ? { color: "#8496a3", fontSize: 11, fontWeight: 700 } : undefined}
+        className={`flex h-5 w-5 cursor-pointer select-none items-center justify-center rounded font-bold ${
+          included ? "bg-[#16a34a] text-[12px] text-white" : "border-[1.5px] border-[#cbd6d0] bg-white text-[11px] text-[#8496a3]"
+        }`}
       >
         {included ? <Check size={12} strokeWidth={2.5} /> : index}
       </div>
-      <div style={{ flex: 1 }}>
-        <div className="section-title">{title}</div>
-        <div className="section-sub">{sub}</div>
+      <div className="flex-1">
+        <div className={sectionTitle}>{title}</div>
+        <div className={sectionSub}>{sub}</div>
       </div>
       {icons ? (
-        <div className="social-icons-group" style={{ display: "flex", gap: 6, color: "#8496a3" }}>
+        <div className="ml-auto flex gap-1.5 text-[13px] text-[#8496a3]">
           {icons.map((Icon, iconIndex) => (
             <Icon key={iconIndex} size={14} strokeWidth={2} />
           ))}
@@ -294,10 +321,10 @@ const SectionCard = ({
         size={16}
         strokeWidth={2}
         color="#8496a3"
-        style={{ transform: included ? "rotate(0deg)" : "rotate(-90deg)", transition: "transform .15s ease", flexShrink: 0 }}
+        className={`shrink-0 transition-transform duration-150 ease-[ease] ${included ? "" : "-rotate-90"}`}
       />
     </div>
-    {included ? <div style={{ padding: "0 20px 20px" }}>{children}</div> : null}
+    {included ? <div className="px-5 pb-5">{children}</div> : null}
   </div>
 );
 
@@ -319,7 +346,7 @@ const FigureInput = ({
   <input
     type="text"
     inputMode="numeric"
-    className={`input-pill${center ? " text-center" : ""}`}
+    className={`${inputPill}${center ? " text-center" : ""}`}
     placeholder={placeholder}
     aria-label={label}
     value={value}
@@ -330,7 +357,11 @@ const FigureInput = ({
 
 const AddRowButton = ({ disabled, onClick }: { disabled: boolean; onClick: () => void }) =>
   disabled ? null : (
-    <button className="btn-add-item" type="button" onClick={onClick} style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 12 }}>
+    <button
+      className="mt-3 inline-flex cursor-pointer items-center gap-1 rounded-[20px] bg-[#2563eb] px-3.5 py-1.75 text-[11.5px] font-semibold text-white"
+      type="button"
+      onClick={onClick}
+    >
       <Plus size={12} strokeWidth={2.5} /> Add Another
     </button>
   );
@@ -338,11 +369,10 @@ const AddRowButton = ({ disabled, onClick }: { disabled: boolean; onClick: () =>
 const RemoveRowButton = ({ label, onClick, disabled, reason }: { label: string; onClick: () => void; disabled?: boolean; reason?: string }) => (
   <button
     type="button"
-    className="more-btn"
+    className={`${moreBtn} disabled:cursor-not-allowed disabled:opacity-30`}
     aria-label={label}
     title={disabled ? reason : "Remove"}
     disabled={disabled}
-    style={disabled ? { opacity: 0.3, cursor: "not-allowed" } : undefined}
     onClick={onClick}
   >
     <X size={14} strokeWidth={2} />
@@ -352,18 +382,21 @@ const RemoveRowButton = ({ label, onClick, disabled, reason }: { label: string; 
 // ── The editor ──────────────────────────────────────────────────────────────
 
 // Pass `report` to edit an existing one; leave it out to write a new one.
+// `initialClientId` picks the client for a new report (from a client's page).
 const ReportEditor = ({
   clients,
   report,
   role,
   userName,
   readOnly,
+  initialClientId = "",
 }: {
   clients: { _id: string; companyName: string }[];
   report?: Report;
   role: string;
   userName: string;
   readOnly: boolean;
+  initialClientId?: string;
 }) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -371,9 +404,15 @@ const ReportEditor = ({
   const status: ReportStatus = report?.status ?? "draft";
   const canReview = canReviewReports(role);
 
-  const [values, setValues] = useState<Values>(() => valuesFrom(report));
+  const [values, setValues] = useState<Values>(() => {
+    const initial = valuesFrom(report);
+    if (!report && clients.some((option) => option._id === initialClientId)) initial.clientId = initialClientId;
+    return initial;
+  });
   const [included, setIncluded] = useState<Record<SectionKey, boolean>>(() => includedFrom(report));
   const [error, setError] = useState<string | null>(null);
+  // Which button was pressed, so that one shows the spinner.
+  const [pressed, setPressed] = useState<ReportStatus | "save">("save");
   const [problems, setProblems] = useState<string[]>([]);
 
   const disabled = readOnly || isPending;
@@ -393,6 +432,7 @@ const ReportEditor = ({
 
   // Save the form, then optionally move the report to another status.
   const save = (target?: ReportStatus) => {
+    setPressed(target ?? "save");
     setError(null);
     setProblems([]);
 
@@ -456,13 +496,37 @@ const ReportEditor = ({
   const actionButtons = (
     <>
       {!readOnly ? (
-        <button className="btn-draft" type="button" disabled={isPending} onClick={() => save()}>
-          {isPending ? "Saving…" : saveLabel}
+        <button
+          className={`${btnDraft} inline-flex items-center gap-1.5 disabled:cursor-wait`}
+          type="button"
+          disabled={isPending}
+          aria-busy={isPending && pressed === "save"}
+          onClick={() => save()}
+        >
+          {isPending && pressed === "save" ? (
+            <>
+              <Loader2 size={14} strokeWidth={2.25} className="animate-spin" /> Saving…
+            </>
+          ) : (
+            saveLabel
+          )}
         </button>
       ) : null}
       {primary ? (
-        <button className="btn-primary-preview" type="button" disabled={isPending} onClick={() => save(primary.target)}>
-          {primary.label}
+        <button
+          className="inline-flex cursor-pointer items-center gap-1.5 rounded-md bg-[#0b1522] px-4.5 py-2 text-[13px] font-semibold text-white shadow-[0_1px_2px_rgba(11,21,34,0.2)] hover:bg-[#17263a] disabled:cursor-wait"
+          type="button"
+          disabled={isPending}
+          aria-busy={isPending && pressed === primary.target}
+          onClick={() => save(primary.target)}
+        >
+          {isPending && pressed === primary.target ? (
+            <>
+              <Loader2 size={14} strokeWidth={2.25} className="animate-spin" /> {primary.target === "published" ? "Publishing…" : "Submitting…"}
+            </>
+          ) : (
+            primary.label
+          )}
         </button>
       ) : null}
     </>
@@ -470,44 +534,35 @@ const ReportEditor = ({
 
   return (
     <>
-      <div className="breadcrumb-row">
-        <div className="breadcrumbs">
-          <Link href="/monthly-reports" className="breadcrumb-link">
+      <div className={breadcrumbRow}>
+        <div className={breadcrumbs}>
+          <Link href="/monthly-reports" className={breadcrumbLink}>
             Monthly Reports
           </Link>{" "}
           / {report ? <>{clientName} / <b>{periodLabel(report)}</b></> : <b>New Report</b>}
         </div>
       </div>
 
-      <RoleAlertBanner
-        message={
-          <>
-            You&apos;re viewing the <b>{roleLabel(role)}</b> editor for this report.
-          </>
-        }
-      />
-
-      <div className="headline-row">
+      <div className={headlineRow}>
         <div>
-          <div className="page-title">{report ? report.title : "New Report"}</div>
-          <div className="status-line">
+          <div className={pageTitle}>{report ? report.title : "New Report"}</div>
+          <div className="mt-1 flex items-center gap-3 text-[12px] text-[#657787]">
             {isEdit ? (
               <span className={badge.badge}>
                 <span className={badge.dot} /> {badge.label}
               </span>
             ) : (
-              <span className="tag-draft">
-                <span className="dot-amber" /> Draft • In Progress
+              <span className="inline-flex items-center gap-1.25 rounded-xl bg-[#fef3c7] px-2 py-0.5 text-[11px] font-bold text-[#92400e]">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#b45309]" /> Draft • In Progress
               </span>
             )}
             <span>{report ? `Last saved ${formatDateTime(report.updatedAt)}` : "Not yet saved"}</span>
           </div>
         </div>
-        <div className="action-buttons">{actionButtons}</div>
       </div>
 
       {readOnly ? (
-        <div className="role-alert-banner" role="status">
+        <div className={roleAlertBanner} role="status">
           {canWriteReports(role)
             ? "This report has been handed in for review, so it can't be edited. A manager can edit it or send it back to draft."
             : "You can view this report but not change it."}
@@ -515,7 +570,7 @@ const ReportEditor = ({
       ) : null}
 
       {error ? (
-        <div className="form-error-banner" role="alert" style={{ marginTop: 0, marginBottom: 14 }}>
+        <div className={`${formErrorBannerBase} mb-3.5`} role="alert">
           {error}
           {problems.length ? (
             <ul>
@@ -527,13 +582,13 @@ const ReportEditor = ({
         </div>
       ) : null}
 
-      <div className="meta-card">
-        <div className="meta-col">
-          <div className="meta-lbl">Client</div>
+      <div className="grid grid-cols-4 rounded-lg border border-[#dbe3de] bg-white">
+        <div className={metaCol}>
+          <div className={metaLbl}>Client</div>
           {isEdit ? (
-            <div className="meta-val">{clientName}</div>
+            <div className={metaVal}>{clientName}</div>
           ) : (
-            <select className="input-text" value={values.clientId} disabled={disabled} onChange={(event) => patch({ clientId: event.target.value })}>
+            <select className={inputText} value={values.clientId} disabled={disabled} onChange={(event) => patch({ clientId: event.target.value })}>
               <option value="" disabled>
                 — Select Client —
               </option>
@@ -545,11 +600,11 @@ const ReportEditor = ({
             </select>
           )}
         </div>
-        <div className="meta-col">
-          <div className="meta-lbl">Report Period</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div className={metaCol}>
+          <div className={metaLbl}>Report Period</div>
+          <div className="flex flex-col gap-1.5">
             <select
-              className="input-text"
+              className={inputText}
               aria-label="Period type"
               value={values.periodType}
               disabled={disabled}
@@ -559,61 +614,63 @@ const ReportEditor = ({
               <option value="weekly">Weekly</option>
             </select>
             {values.periodType === "monthly" ? (
-              <input type="month" className="input-text" aria-label="Report month" value={values.periodValue} disabled={disabled} onChange={(event) => patch({ periodValue: event.target.value })} />
+              <input type="month" className={inputText} aria-label="Report month" value={values.periodValue} disabled={disabled} onChange={(event) => patch({ periodValue: event.target.value })} />
             ) : (
-              <input type="date" className="input-text" aria-label="Week starting" value={values.periodValue} disabled={disabled} onChange={(event) => patch({ periodValue: event.target.value })} />
+              <input type="date" className={inputText} aria-label="Week starting" value={values.periodValue} disabled={disabled} onChange={(event) => patch({ periodValue: event.target.value })} />
             )}
             {values.periodType === "weekly" && dates ? (
-              <div style={{ fontSize: 11, color: "#7a8e9b" }}>Ends {formatDate(dates.periodEnd)}</div>
+              <div className="text-[11px] text-[#7a8e9b]">Ends {formatDate(dates.periodEnd)}</div>
             ) : null}
           </div>
         </div>
-        <div className="meta-col">
-          <div className="meta-lbl">Prepared By</div>
-          <div className="meta-val">{preparedBy}</div>
+        <div className={metaCol}>
+          <div className={metaLbl}>Prepared By</div>
+          <div className={metaVal}>{preparedBy}</div>
         </div>
-        <div className="meta-col">
-          <div className="meta-lbl">Sections Included</div>
-          <div className="meta-val">{includedCount} of 4</div>
-          <div style={{ marginTop: 6, height: 4, borderRadius: 2, background: "#eef3ef", overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${progressPct}%`, background: "#16a34a", borderRadius: 2, transition: "width .2s ease" }} />
+        <div className={metaCol}>
+          <div className={metaLbl}>Sections Included</div>
+          <div className={metaVal}>{includedCount} of 4</div>
+          <div className="mt-1.5 h-1 overflow-hidden rounded-xs bg-[#eef3ef]">
+            <div
+              className="h-full rounded-xs bg-[#16a34a] transition-[width] duration-200 ease-[ease]"
+              style={{ width: `${progressPct}%` }}
+            />
           </div>
         </div>
       </div>
 
-      <div className="layout-grid">
-        <div className="content-stack">
-          <div className="report-section-card">
-            <div className="section-title">Executive Summary</div>
-            <div className="section-sub">The written overview the client reads first. Separate paragraphs with a blank line.</div>
+      <div className={layoutGrid}>
+        <div className={contentStack}>
+          <div className="rounded-lg border border-[#dbe3de] bg-white p-5">
+            <div className={sectionTitle}>Executive Summary</div>
+            <div className={sectionSub}>The written overview the client reads first. Separate paragraphs with a blank line.</div>
             <textarea
-              className="textarea-caption"
-              style={{ height: 120, marginTop: 10 }}
+              className={`${textareaBase} mt-2.5 h-30`}
               placeholder="Write a short summary of the period..."
               maxLength={SUMMARY_LIMIT}
               value={values.summary}
               disabled={disabled}
               onChange={(event) => patch({ summary: event.target.value })}
             />
-            <div className="field-hint" style={{ textAlign: "right", fontStyle: "normal" }}>
+            <div className={`${fieldHintPlain} text-right`}>
               {values.summary.length}/{SUMMARY_LIMIT}
             </div>
           </div>
 
           <SectionCard index={1} title="Social Media Content Performance" sub="Reach per platform and the best-performing video" icons={[Camera, Smartphone, Mail]} included={included.social} disabled={readOnly} onToggle={() => toggle("social")}>
-            <div className="table-subtitle">Platform Reach</div>
-            <table className="data-table">
+            <div className={tableSubtitle}>Platform Reach</div>
+            <table className={dataTable}>
               <thead>
-                <tr>
-                  <th style={{ width: "50%" }}>Platform</th>
-                  <th>Reach this period</th>
+                <tr className={dataTr}>
+                  <th className={`${dataTh} w-[50%]`}>Platform</th>
+                  <th className={dataTh}>Reach this period</th>
                 </tr>
               </thead>
               <tbody>
                 {SOCIAL_FIELDS.map(([label, key, placeholder]) => (
-                  <tr key={key}>
-                    <td>{label}</td>
-                    <td>
+                  <tr key={key} className={dataTr}>
+                    <td className={dataTd}>{label}</td>
+                    <td className={dataTd}>
                       <FigureInput label={`${label} reach`} value={values.social[key]} placeholder={placeholder} disabled={disabled} onChange={(value) => patch({ social: { ...values.social, [key]: value } })} />
                     </td>
                   </tr>
@@ -621,22 +678,22 @@ const ReportEditor = ({
               </tbody>
             </table>
 
-            <div className="table-subtitle" style={{ marginTop: 16 }}>
+            <div className={`${tableSubtitle} mt-4`}>
               Best-performing Video
             </div>
-            <table className="data-table">
+            <table className={dataTable}>
               <thead>
-                <tr>
-                  <th style={{ width: "72%" }}>Video Title</th>
-                  <th>Views</th>
+                <tr className={dataTr}>
+                  <th className={`${dataTh} w-[72%]`}>Video Title</th>
+                  <th className={dataTh}>Views</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>
-                    <input type="text" className="input-pill" aria-label="Video title" placeholder="e.g. Know Your Rights — Reel" value={values.social.reelTitle} disabled={disabled} onChange={(event) => patch({ social: { ...values.social, reelTitle: event.target.value } })} />
+                <tr className={dataTr}>
+                  <td className={dataTd}>
+                    <input type="text" className={inputPill} aria-label="Video title" placeholder="e.g. Know Your Rights — Reel" value={values.social.reelTitle} disabled={disabled} onChange={(event) => patch({ social: { ...values.social, reelTitle: event.target.value } })} />
                   </td>
-                  <td>
+                  <td className={dataTd}>
                     <FigureInput label="Video views" value={values.social.reelViews} placeholder="e.g. 14,300" disabled={disabled} onChange={(value) => patch({ social: { ...values.social, reelViews: value } })} />
                   </td>
                 </tr>
@@ -645,32 +702,32 @@ const ReportEditor = ({
           </SectionCard>
 
           <SectionCard index={2} title="Blogs" sub="Published blogs for this period" included={included.blogs} disabled={readOnly} onToggle={() => toggle("blogs")}>
-            <table className="data-table">
+            <table className={dataTable}>
               <thead>
-                <tr>
-                  <th style={{ width: "32%" }}>Title</th>
-                  <th style={{ width: "32%" }}>Link</th>
-                  <th style={{ width: "18%" }}>Published</th>
-                  <th style={{ width: "12%" }}>Graphics</th>
-                  <th style={{ width: "6%" }} />
+                <tr className={dataTr}>
+                  <th className={`${dataTh} w-[32%]`}>Title</th>
+                  <th className={`${dataTh} w-[32%]`}>Link</th>
+                  <th className={`${dataTh} w-[18%]`}>Published</th>
+                  <th className={`${dataTh} w-[12%]`}>Graphics</th>
+                  <th className={`${dataTh} w-[6%]`} />
                 </tr>
               </thead>
               <tbody>
                 {values.blogs.map((row, index) => (
-                  <tr key={index}>
-                    <td>
-                      <input type="text" className="input-pill" aria-label="Blog title" placeholder="e.g. Vehicle Black Box Data and Your Case" value={row.title} disabled={disabled} onChange={(event) => setBlog(index, { title: event.target.value })} />
+                  <tr key={index} className={dataTr}>
+                    <td className={dataTd}>
+                      <input type="text" className={inputPill} aria-label="Blog title" placeholder="e.g. Vehicle Black Box Data and Your Case" value={row.title} disabled={disabled} onChange={(event) => setBlog(index, { title: event.target.value })} />
                     </td>
-                    <td>
-                      <input type="text" className="input-pill" aria-label="Blog link" placeholder="e.g. carterinjurylaw.com/blog/black-box" value={row.url} disabled={disabled} onChange={(event) => setBlog(index, { url: event.target.value })} />
+                    <td className={dataTd}>
+                      <input type="text" className={inputPill} aria-label="Blog link" placeholder="e.g. carterinjurylaw.com/blog/black-box" value={row.url} disabled={disabled} onChange={(event) => setBlog(index, { url: event.target.value })} />
                     </td>
-                    <td>
-                      <input type="date" className="input-pill" aria-label="Published date" value={row.publishedAt} disabled={disabled} onChange={(event) => setBlog(index, { publishedAt: event.target.value })} />
+                    <td className={dataTd}>
+                      <input type="date" className={inputPill} aria-label="Published date" value={row.publishedAt} disabled={disabled} onChange={(event) => setBlog(index, { publishedAt: event.target.value })} />
                     </td>
-                    <td>
+                    <td className={dataTd}>
                       <FigureInput center label="Graphics" value={row.graphicsCount} placeholder="e.g. 2" disabled={disabled} onChange={(value) => setBlog(index, { graphicsCount: value })} />
                     </td>
-                    <td>
+                    <td className={dataTd}>
                       {!readOnly ? (
                         <RemoveRowButton
                           label="Remove blog"
@@ -689,18 +746,18 @@ const ReportEditor = ({
           </SectionCard>
 
           <SectionCard index={3} title="Website Performance Report" sub="Traffic, user behavior & key metrics" included={included.website} disabled={readOnly} onToggle={() => toggle("website")}>
-            <table className="data-table">
+            <table className={dataTable}>
               <thead>
-                <tr>
-                  <th style={{ width: "50%" }}>Metric</th>
-                  <th>This period</th>
+                <tr className={dataTr}>
+                  <th className={`${dataTh} w-[50%]`}>Metric</th>
+                  <th className={dataTh}>This period</th>
                 </tr>
               </thead>
               <tbody>
                 {WEBSITE_FIELDS.map(([label, key, placeholder]) => (
-                  <tr key={key}>
-                    <td>{label}</td>
-                    <td>
+                  <tr key={key} className={dataTr}>
+                    <td className={dataTd}>{label}</td>
+                    <td className={dataTd}>
                       <FigureInput label={label} value={values.website[key]} placeholder={placeholder} disabled={disabled} onChange={(value) => patch({ website: { ...values.website, [key]: value } })} />
                     </td>
                   </tr>
@@ -710,18 +767,18 @@ const ReportEditor = ({
           </SectionCard>
 
           <SectionCard index={4} title="GMB Performance Report" sub="Google Business Profile & local visibility" included={included.gmb} disabled={readOnly} onToggle={() => toggle("gmb")}>
-            <table className="data-table">
+            <table className={dataTable}>
               <thead>
-                <tr>
-                  <th style={{ width: "50%" }}>Metric</th>
-                  <th>This period</th>
+                <tr className={dataTr}>
+                  <th className={`${dataTh} w-[50%]`}>Metric</th>
+                  <th className={dataTh}>This period</th>
                 </tr>
               </thead>
               <tbody>
                 {GMB_FIELDS.map(([label, key, placeholder]) => (
-                  <tr key={key}>
-                    <td>{label}</td>
-                    <td>
+                  <tr key={key} className={dataTr}>
+                    <td className={dataTd}>{label}</td>
+                    <td className={dataTd}>
                       <FigureInput label={label} value={values.gmb[key]} placeholder={placeholder} disabled={disabled} onChange={(value) => patch({ gmb: { ...values.gmb, [key]: value } })} />
                     </td>
                   </tr>
@@ -729,42 +786,42 @@ const ReportEditor = ({
               </tbody>
             </table>
 
-            <div className="table-subtitle" style={{ marginTop: 16 }}>
+            <div className={`${tableSubtitle} mt-4`}>
               By Location
             </div>
-            <table className="data-table">
+            <table className={dataTable}>
               <thead>
-                <tr>
-                  <th style={{ width: "34%" }}>Location</th>
-                  <th style={{ width: "20%" }}>Impressions</th>
-                  <th style={{ width: "20%" }}>Calls</th>
-                  <th style={{ width: "20%" }}>Directions</th>
-                  <th style={{ width: "6%" }} />
+                <tr className={dataTr}>
+                  <th className={`${dataTh} w-[34%]`}>Location</th>
+                  <th className={`${dataTh} w-[20%]`}>Impressions</th>
+                  <th className={`${dataTh} w-[20%]`}>Calls</th>
+                  <th className={`${dataTh} w-[20%]`}>Directions</th>
+                  <th className={`${dataTh} w-[6%]`} />
                 </tr>
               </thead>
               <tbody>
                 {values.locations.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} style={{ color: "#7a8e9b" }}>
+                  <tr className={dataTr}>
+                    <td colSpan={5} className={`${dataTd} text-[#7a8e9b]`}>
                       No locations added yet.
                     </td>
                   </tr>
                 ) : null}
                 {values.locations.map((row, index) => (
-                  <tr key={index}>
-                    <td>
-                      <input type="text" className="input-pill" aria-label="Location name" placeholder="e.g. Tampa" value={row.name} disabled={disabled} onChange={(event) => setLocation(index, { name: event.target.value })} />
+                  <tr key={index} className={dataTr}>
+                    <td className={dataTd}>
+                      <input type="text" className={inputPill} aria-label="Location name" placeholder="e.g. Tampa" value={row.name} disabled={disabled} onChange={(event) => setLocation(index, { name: event.target.value })} />
                     </td>
-                    <td>
+                    <td className={dataTd}>
                       <FigureInput label="Location impressions" value={row.impressions} placeholder="e.g. 1,486" disabled={disabled} onChange={(value) => setLocation(index, { impressions: value })} />
                     </td>
-                    <td>
+                    <td className={dataTd}>
                       <FigureInput label="Location calls" value={row.calls} placeholder="e.g. 21" disabled={disabled} onChange={(value) => setLocation(index, { calls: value })} />
                     </td>
-                    <td>
+                    <td className={dataTd}>
                       <FigureInput label="Location directions" value={row.directions} placeholder="e.g. 88" disabled={disabled} onChange={(value) => setLocation(index, { directions: value })} />
                     </td>
-                    <td>{!readOnly ? <RemoveRowButton label="Remove location" onClick={() => patch({ locations: values.locations.filter((_, i) => i !== index) })} /> : null}</td>
+                    <td className={dataTd}>{!readOnly ? <RemoveRowButton label="Remove location" onClick={() => patch({ locations: values.locations.filter((_, i) => i !== index) })} /> : null}</td>
                   </tr>
                 ))}
               </tbody>
@@ -774,16 +831,16 @@ const ReportEditor = ({
         </div>
 
         <div>
-          <div className="side-card">
-            <div className="side-title">Report Status</div>
-            <div style={{ marginTop: 8 }}>
+          <div className={sideCard}>
+            <div className={sideTitle}>Report Status</div>
+            <div className="mt-2">
               <span className={badge.badge}>
                 <span className={badge.dot} /> {isEdit ? badge.label : "Not saved yet"}
               </span>
             </div>
 
             {report ? (
-              <div style={{ fontSize: 11.5, color: "#64748b", lineHeight: 1.7, marginTop: 10 }}>
+              <div className="mt-2.5 text-[11.5px] leading-[1.7] text-[#64748b]">
                 <div>Created {formatDate(report.createdAt)}</div>
                 {report.submittedAt ? <div>Handed in {formatDate(report.submittedAt)}</div> : null}
                 {report.approvedAt ? (
@@ -800,20 +857,20 @@ const ReportEditor = ({
                 ) : null}
               </div>
             ) : (
-              <div style={{ fontSize: 11.5, color: "#64748b", lineHeight: 1.5, marginTop: 10 }}>
+              <div className="mt-2.5 text-[11.5px] leading-normal text-[#64748b]">
                 Save a draft first. You can come back to it any time before handing it in.
               </div>
             )}
 
             {report && canReview && !readOnly ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 14 }}>
+              <div className="mt-3.5 flex flex-col gap-2">
                 {status === "draft" || status === "submitted" ? (
-                  <button className="btn-draft" type="button" disabled={isPending} onClick={() => save("approved")}>
+                  <button className={btnDraft} type="button" disabled={isPending} onClick={() => save("approved")}>
                     Approve
                   </button>
                 ) : null}
                 {status !== "draft" ? (
-                  <button className="btn-draft" type="button" disabled={isPending} onClick={() => save("draft")}>
+                  <button className={btnDraft} type="button" disabled={isPending} onClick={() => save("draft")}>
                     Send back to draft
                   </button>
                 ) : null}
@@ -821,9 +878,9 @@ const ReportEditor = ({
             ) : null}
           </div>
 
-          <div className="side-card">
-            <div className="side-title">Before You Send</div>
-            <div style={{ fontSize: 11.5, color: "#64748b", lineHeight: 1.5, marginTop: 8 }}>
+          <div className={sideCard}>
+            <div className={sideTitle}>Before You Send</div>
+            <div className={sideNote}>
               {canReview ? (
                 <>
                   Once published, this report becomes visible on <b>the client&apos;s</b> dashboard immediately. Nothing is
@@ -836,7 +893,7 @@ const ReportEditor = ({
                 </>
               )}
             </div>
-            <div style={{ fontSize: 11.5, color: "#64748b", lineHeight: 1.5, marginTop: 8 }}>
+            <div className={sideNote}>
               The percentage changes clients see are worked out from the previous published report, so only enter this
               period&apos;s figures.
             </div>
@@ -844,10 +901,12 @@ const ReportEditor = ({
         </div>
       </div>
 
-      <div className="bottom-actions">
-        <div className="autosave-tag">{report ? `Last saved ${formatDateTime(report.updatedAt)}` : "Not yet saved"}</div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <Link href="/monthly-reports" className="btn-draft">
+      <div className="flex items-center justify-end gap-2.5 rounded-lg border border-[#dbe3de] bg-white px-5 py-3">
+        <div className="flex items-center gap-1.5 text-[12px] text-[#64748b]">
+          {report ? `Last saved ${formatDateTime(report.updatedAt)}` : "Not yet saved"}
+        </div>
+        <div className="flex gap-2.5">
+          <Link href="/monthly-reports" className={btnDraft}>
             Back to All Reports
           </Link>
           {actionButtons}

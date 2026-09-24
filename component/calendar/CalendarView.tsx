@@ -4,6 +4,7 @@ import { useState } from "react";
 import { specialists } from "./data";
 import SpecialistGrid from "./SpecialistGrid";
 import SpecialistCalendar from "./SpecialistCalendar";
+import { pageDesc, pageTitle } from "@/component/shared/ui";
 
 const CalendarView = () => {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -11,10 +12,10 @@ const CalendarView = () => {
 
   return (
     <>
-      <div className="calendar-header-row">
+      <div className="flex items-start justify-between gap-5">
         <div>
-          <div className="page-title">Calendar</div>
-          <div className="page-desc">
+          <div className={pageTitle}>Calendar</div>
+          <div className={pageDesc}>
             View each specialist&apos;s availability and the meetings clients have booked with them.
           </div>
         </div>

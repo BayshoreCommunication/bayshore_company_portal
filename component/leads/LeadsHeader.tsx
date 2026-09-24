@@ -1,24 +1,36 @@
+import {
+  actionButtons,
+  breadcrumbLink,
+  breadcrumbRow,
+  breadcrumbs,
+  btnDraft,
+  btnPrimary,
+  headlineRow,
+  pageDesc,
+  pageTitle,
+} from "@/component/shared/ui";
+
 const LeadsHeader = () => {
   return (
     <>
-      <div className="breadcrumb-row">
-        <div className="breadcrumbs">
-          <span className="breadcrumb-link">Leads</span> / <b>Carter Injury Law</b>
+      <div className={breadcrumbRow}>
+        <div className={breadcrumbs}>
+          <span className={breadcrumbLink}>Leads</span> / <b>Carter Injury Law</b>
         </div>
       </div>
 
-      <div className="headline-row">
+      <div className={headlineRow}>
         <div>
-          <div className="page-title">Leads — Carter Injury Law</div>
-          <div className="page-desc">
+          <div className={pageTitle}>Leads — Carter Injury Law</div>
+          <div className={pageDesc}>
             Every inquiry captured across GMB, the website, and social — September 2026.
           </div>
         </div>
-        <div className="action-buttons">
-          <button className="btn-draft" type="button">
+        <div className={actionButtons}>
+          <button className={btnDraft} type="button">
             Export CSV
           </button>
-          <button className="btn-primary" type="button">
+          <button className={btnPrimary} type="button">
             + Add Lead
           </button>
         </div>

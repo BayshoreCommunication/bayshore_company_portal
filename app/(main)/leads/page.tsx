@@ -11,7 +11,7 @@ const LeadsPage = () => {
       <LeadStats />
       <LeadsFilterRow />
 
-      <div className="dash-main-grid" style={{ gridTemplateColumns: "2.2fr 1fr", alignItems: "stretch" }}>
+      <div className="grid grid-cols-[2.2fr_1fr] items-stretch gap-5">
         <LeadsTable />
         <LeadsSidePanel />
       </div>

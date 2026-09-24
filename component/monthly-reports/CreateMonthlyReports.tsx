@@ -4,10 +4,12 @@ const CreateMonthlyReports = ({
   clients,
   role,
   userName,
+  initialClientId,
 }: {
   clients: { _id: string; companyName: string }[];
   role: string;
   userName: string;
-}) => <ReportEditor clients={clients} role={role} userName={userName} readOnly={false} />;
+  initialClientId?: string;
+}) => <ReportEditor clients={clients} role={role} userName={userName} readOnly={false} initialClientId={initialClientId} />;
 
 export default CreateMonthlyReports;

@@ -12,7 +12,40 @@ import {
   type ClientStatus,
 } from "@/app/actions/clients";
 import MultiSelect from "@/component/shared/MultiSelect";
+import {
+  breadcrumbLink,
+  breadcrumbRow,
+  breadcrumbs,
+  btnDraft,
+  btnSaveClient,
+  clientStatIcon,
+  dashLink,
+  dashSideCol,
+  fieldError,
+  fieldHintPlain,
+  fieldLabel,
+  formErrorBanner,
+  formGrid2,
+  inputBase,
+  inputText,
+  pageDesc,
+  pageTitle,
+  requiredStar,
+  sectionCard,
+  sectionSub,
+  sectionTitle,
+  sideCard,
+  sideCardBase,
+  sideTitle,
+  textareaBase,
+} from "@/component/shared/ui";
 import { CLIENT_STATUS_OPTIONS, NOTES_LIMIT, SERVICE_TYPES, todayInputValue } from "./clientUi";
+
+const passwordInput = `${inputBase} pr-9.5 pl-3`;
+const passwordToggle =
+  "absolute top-1/2 right-2 inline-flex h-6.5 w-6.5 -translate-y-1/2 cursor-pointer items-center justify-center rounded text-[#657787] hover:bg-[#eef3ef] hover:text-[#17242f] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#2563eb]";
+const tipTitle = "text-[13px] font-bold text-[#0d1e2c]";
+const tipText = "mt-1 text-[11px] text-[#7a8e9b]";
 
 const BENEFITS = [
   "Easy client management",
@@ -104,14 +137,14 @@ const ClientForm = ({ client }: { client?: Client }) => {
 
   return (
     <>
-      <div className="breadcrumb-row">
-        <div className="breadcrumbs">
-          <Link href="/clients" className="breadcrumb-link">
+      <div className={breadcrumbRow}>
+        <div className={breadcrumbs}>
+          <Link href="/clients" className={breadcrumbLink}>
             Clients
           </Link>{" "}
           / {client ? (
             <>
-              <Link href={`/clients/${client._id}`} className="breadcrumb-link">
+              <Link href={`/clients/${client._id}`} className={breadcrumbLink}>
                 {client.companyName}
               </Link>{" "}
               / <b>Edit</b>
@@ -122,72 +155,72 @@ const ClientForm = ({ client }: { client?: Client }) => {
         </div>
       </div>
 
-      <div style={{ marginBottom: 20 }}>
-        <div className="page-title">{isEdit ? "Edit Client" : "Add New Client"}</div>
-        <div className="page-desc">
+      <div className="mb-5">
+        <div className={pageTitle}>{isEdit ? "Edit Client" : "Add New Client"}</div>
+        <div className={pageDesc}>
           {isEdit
             ? "Update the client's details. Their portal login is kept in sync."
             : "Add a new client to your account. A portal login is created for them automatically."}
         </div>
       </div>
 
-      <div className="add-client-grid">
-        <div className="section-card">
+      <div className="grid grid-cols-[2fr_1fr] items-start gap-5">
+        <div className={sectionCard}>
             <form onSubmit={handleSubmit}>
-              <div className="section-header" style={{ borderBottom: "none", marginBottom: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div className="client-stat-icon" style={{ background: "#dbeafe", color: "#2563eb", width: 34, height: 34, fontSize: 15 }}>
+              <div className="mb-2.5 flex items-center justify-between gap-2.5 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-lg bg-[#dbeafe] text-[15px] text-[#2563eb]">
                     <Users size={17} strokeWidth={2} />
                   </div>
                   <div>
-                    <div className="section-title">Client Information</div>
-                    <div className="section-sub" style={{ fontWeight: 500 }}>
+                    <div className={sectionTitle}>Client Information</div>
+                    <div className={`${sectionSub} font-medium`}>
                       Provide the basic information about your client.
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="form-grid-2">
+              <div className={formGrid2}>
                 <div>
-                  <label className="field-label" htmlFor="contactName">
-                    Client Name <span className="required-star">*</span>
+                  <label className={fieldLabel} htmlFor="contactName">
+                    Client Name <span className={requiredStar}>*</span>
                   </label>
-                  <input id="contactName" type="text" className="input-text" placeholder="Enter client name" required value={contactName} onChange={(e) => setContactName(e.target.value)} />
+                  <input id="contactName" type="text" className={inputText} placeholder="Enter client name" required value={contactName} onChange={(e) => setContactName(e.target.value)} />
                 </div>
                 <div>
-                  <label className="field-label" htmlFor="companyName">
-                    Company Name <span className="required-star">*</span>
+                  <label className={fieldLabel} htmlFor="companyName">
+                    Company Name <span className={requiredStar}>*</span>
                   </label>
-                  <input id="companyName" type="text" className="input-text" placeholder="Enter company name" required value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+                  <input id="companyName" type="text" className={inputText} placeholder="Enter company name" required value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
                 </div>
               </div>
 
-              <div className="form-grid-2" style={{ marginTop: 16 }}>
+              <div className={`${formGrid2} mt-4`}>
                 <div>
-                  <label className="field-label" htmlFor="email">
-                    Email Address <span className="required-star">*</span>
+                  <label className={fieldLabel} htmlFor="email">
+                    Email Address <span className={requiredStar}>*</span>
                   </label>
-                  <input id="email" type="email" className="input-text" placeholder="client@company.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                  <input id="email" type="email" className={inputText} placeholder="client@company.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
                 </div>
                 <div>
-                  <label className="field-label" htmlFor="phone">
+                  <label className={fieldLabel} htmlFor="phone">
                     Phone Number
                   </label>
-                  <input id="phone" type="text" className="input-text" placeholder="+1 987 654 3210" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                  <input id="phone" type="text" className={inputText} placeholder="+1 987 654 3210" value={phone} onChange={(e) => setPhone(e.target.value)} />
                 </div>
               </div>
 
-              <div style={{ marginTop: 16 }}>
-                <label className="field-label" htmlFor="address">
+              <div className="mt-4">
+                <label className={fieldLabel} htmlFor="address">
                   Address
                 </label>
-                <textarea id="address" className="textarea-caption" style={{ height: 64 }} placeholder="Enter complete address" value={address} onChange={(e) => setAddress(e.target.value)} />
+                <textarea id="address" className={`${textareaBase} h-16`} placeholder="Enter complete address" value={address} onChange={(e) => setAddress(e.target.value)} />
               </div>
 
-              <div style={{ marginTop: 16 }}>
-                <label className="field-label">
-                  Service Types <span className="required-star">*</span>
+              <div className="mt-4">
+                <label className={fieldLabel}>
+                  Service Types <span className={requiredStar}>*</span>
                 </label>
                 <MultiSelect
                   label="Service types"
@@ -196,47 +229,47 @@ const ClientForm = ({ client }: { client?: Client }) => {
                   onChange={setServiceTypes}
                   placeholder="Select service types"
                 />
-                <div className="field-hint" style={{ fontStyle: "normal" }}>
+                <div className={fieldHintPlain}>
                   Select one or more services this client has signed up for.
                 </div>
               </div>
 
-              <div className="form-grid-2" style={{ marginTop: 16 }}>
+              <div className={`${formGrid2} mt-4`}>
                 <div>
-                  <label className="field-label" htmlFor="startDate">
-                    Start Date <span className="required-star">*</span>
+                  <label className={fieldLabel} htmlFor="startDate">
+                    Start Date <span className={requiredStar}>*</span>
                   </label>
-                  <input id="startDate" type="date" className="input-text" required value={startDate} onChange={(e) => setPickedStartDate(e.target.value)} />
+                  <input id="startDate" type="date" className={inputText} required value={startDate} onChange={(e) => setPickedStartDate(e.target.value)} />
                 </div>
                 <div>
-                  <label className="field-label" htmlFor="status">
-                    Status <span className="required-star">*</span>
+                  <label className={fieldLabel} htmlFor="status">
+                    Status <span className={requiredStar}>*</span>
                   </label>
-                  <select id="status" className="input-text" value={status} onChange={(e) => setStatus(e.target.value as ClientStatus)}>
+                  <select id="status" className={inputText} value={status} onChange={(e) => setStatus(e.target.value as ClientStatus)}>
                     {CLIENT_STATUS_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </select>
-                  <div className="field-hint" style={{ fontStyle: "normal" }}>
+                  <div className={fieldHintPlain}>
                     Only Active clients can sign in to the client portal.
                   </div>
                 </div>
               </div>
 
-              <div className="form-grid-2" style={{ marginTop: 16 }}>
+              <div className={`${formGrid2} mt-4`}>
                 {!isEdit ? (
                   <>
                   <div>
-                    <label className="field-label" htmlFor="password">
-                      Portal Password <span className="required-star">*</span>
+                    <label className={fieldLabel} htmlFor="password">
+                      Portal Password <span className={requiredStar}>*</span>
                     </label>
-                    <div className="password-field">
-                      <input id="password" type={showPassword ? "text" : "password"} className="input-text" placeholder="Enter a password" required minLength={8} maxLength={72} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+                    <div className="relative">
+                      <input id="password" type={showPassword ? "text" : "password"} className={passwordInput} placeholder="Enter a password" required minLength={8} maxLength={72} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
                       <button
                         type="button"
-                        className="password-toggle"
+                        className={passwordToggle}
                         onClick={() => setShowPassword((visible) => !visible)}
                         aria-label={showPassword ? "Hide password" : "Show password"}
                         aria-pressed={showPassword}
@@ -244,19 +277,19 @@ const ClientForm = ({ client }: { client?: Client }) => {
                         {showPassword ? <EyeOff size={15} strokeWidth={2} /> : <Eye size={15} strokeWidth={2} />}
                       </button>
                     </div>
-                    <div className="field-hint" style={{ fontStyle: "normal" }}>
+                    <div className={fieldHintPlain}>
                       At least 8 characters. Share it with the client so they can sign in.
                     </div>
                   </div>
                   <div>
-                    <label className="field-label" htmlFor="confirmPassword">
-                      Confirm Password <span className="required-star">*</span>
+                    <label className={fieldLabel} htmlFor="confirmPassword">
+                      Confirm Password <span className={requiredStar}>*</span>
                     </label>
-                    <div className="password-field">
-                      <input id="confirmPassword" type={showConfirmPassword ? "text" : "password"} className="input-text" placeholder="Re-enter the password" required minLength={8} maxLength={72} autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} aria-invalid={passwordsMismatch} />
+                    <div className="relative">
+                      <input id="confirmPassword" type={showConfirmPassword ? "text" : "password"} className={passwordInput} placeholder="Re-enter the password" required minLength={8} maxLength={72} autoComplete="new-password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} aria-invalid={passwordsMismatch} />
                       <button
                         type="button"
-                        className="password-toggle"
+                        className={passwordToggle}
                         onClick={() => setShowConfirmPassword((visible) => !visible)}
                         aria-label={showConfirmPassword ? "Hide confirm password" : "Show confirm password"}
                         aria-pressed={showConfirmPassword}
@@ -265,11 +298,11 @@ const ClientForm = ({ client }: { client?: Client }) => {
                       </button>
                     </div>
                     {passwordsMismatch ? (
-                      <div className="field-error" role="alert">
+                      <div className={fieldError} role="alert">
                         Passwords do not match.
                       </div>
                     ) : (
-                      <div className="field-hint" style={{ fontStyle: "normal" }}>
+                      <div className={fieldHintPlain}>
                         Type the same password again.
                       </div>
                     )}
@@ -278,18 +311,18 @@ const ClientForm = ({ client }: { client?: Client }) => {
                 ) : null}
               </div>
 
-              <div style={{ marginTop: 16 }}>
-                <label className="field-label" htmlFor="notes">
+              <div className="mt-4">
+                <label className={fieldLabel} htmlFor="notes">
                   Notes
                 </label>
-                <textarea id="notes" className="textarea-caption" style={{ height: 72 }} placeholder="Add any additional notes about this client..." maxLength={NOTES_LIMIT} value={notes} onChange={(e) => setNotes(e.target.value)} />
-                <div className="field-hint" style={{ textAlign: "right", fontStyle: "normal" }}>
+                <textarea id="notes" className={`${textareaBase} h-18`} placeholder="Add any additional notes about this client..." maxLength={NOTES_LIMIT} value={notes} onChange={(e) => setNotes(e.target.value)} />
+                <div className={`${fieldHintPlain} text-right`}>
                   {notes.length}/{NOTES_LIMIT}
                 </div>
               </div>
 
               {error ? (
-                <div className="form-error-banner" role="alert">
+                <div className={formErrorBanner} role="alert">
                   {error}
                   {fieldErrors.length > 0 ? (
                     <ul>
@@ -301,57 +334,53 @@ const ClientForm = ({ client }: { client?: Client }) => {
                 </div>
               ) : null}
 
-              <div className="add-client-actions">
-                <Link href={backHref} className="btn-draft">
+              <div className="mt-5 flex justify-end gap-2.5 border-t border-[#eef3ef] pt-4">
+                <Link href={backHref} className={btnDraft}>
                   Cancel
                 </Link>
-                <button type="submit" className="btn-save-client" disabled={isPending}>
+                <button type="submit" className={btnSaveClient} disabled={isPending}>
                   <Save size={13} strokeWidth={2} /> {isPending ? "Saving…" : isEdit ? "Save Changes" : "Save Client"}
                 </button>
               </div>
             </form>
         </div>
 
-        <div className="dash-side-col">
-          <div className="side-card add-client-tip-card">
-            <div className="client-stat-icon" style={{ background: "#dbeafe", color: "#2563eb", marginBottom: 12 }}>
+        <div className={dashSideCol}>
+          <div className={`${sideCardBase} border-[#bfdbfe] bg-[#eff6ff]`}>
+            <div className={`${clientStatIcon} mb-3 bg-[#dbeafe] text-[#2563eb]`}>
               <Users size={17} strokeWidth={2} />
             </div>
-            <div className="side-title">Build Stronger Client Relationships</div>
-            <ul className="benefits-list">
+            <div className={sideTitle}>Build Stronger Client Relationships</div>
+            <ul className="mt-2.5 flex list-none flex-col gap-2.25 text-[12.5px] font-semibold text-[#17242f]">
               {BENEFITS.map((benefit) => (
-                <li key={benefit} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <li key={benefit} className="flex items-center gap-2">
                   <CheckCircle2 size={14} strokeWidth={2} color="#16a34a" /> {benefit}
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="side-card" style={{ background: "#f0fdf4", borderColor: "#bbf0cc" }}>
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <div className={`${sideCardBase} border-[#bbf0cc] bg-[#f0fdf4]`}>
+            <div className="flex items-start gap-2.5">
               <Lightbulb size={18} strokeWidth={2} color="#16a34a" />
               <div>
-                <div className="side-title" style={{ fontSize: 13 }}>
-                  Pro Tip
-                </div>
-                <div className="dash-pending-sub" style={{ marginTop: 4 }}>
+                <div className={tipTitle}>Pro Tip</div>
+                <div className={tipText}>
                   Add detailed information to provide better service and improve collaboration with your client.
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="side-card">
-            <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+          <div className={sideCard}>
+            <div className="flex items-start gap-2.5">
               <Headphones size={18} strokeWidth={2} color="#556977" />
               <div>
-                <div className="side-title" style={{ fontSize: 13 }}>
-                  Need Help?
-                </div>
-                <div className="dash-pending-sub" style={{ marginTop: 4 }}>
+                <div className={tipTitle}>Need Help?</div>
+                <div className={tipText}>
                   If you need assistance adding a client, check our help documentation or contact support.
                 </div>
-                <div className="dash-link" style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 4 }}>
+                <div className={`${dashLink} mt-2 inline-flex items-center gap-1`}>
                   Contact Support <ArrowRight size={12} strokeWidth={2.5} />
                 </div>
               </div>

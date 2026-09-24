@@ -1,16 +1,18 @@
+import { breadcrumbRow, breadcrumbs, headlineRow, pageDesc, pageTitle } from "@/component/shared/ui";
+
 const ProjectsHeader = () => {
   return (
     <>
-      <div className="breadcrumb-row">
-        <div className="breadcrumbs">
+      <div className={breadcrumbRow}>
+        <div className={breadcrumbs}>
           <b>Projects</b>
         </div>
       </div>
 
-      <div className="headline-row">
+      <div className={headlineRow}>
         <div>
-          <div className="page-title">Client Projects</div>
-          <div className="page-desc">Larger initiatives clients have submitted from their portal.</div>
+          <div className={pageTitle}>Client Projects</div>
+          <div className={pageDesc}>Larger initiatives clients have submitted from their portal.</div>
         </div>
       </div>
     </>

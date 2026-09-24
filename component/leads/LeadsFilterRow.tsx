@@ -1,31 +1,23 @@
 import { ListFilter, Clock, Calendar, Search } from "lucide-react";
+import { dashSearch, dashSearchIcon } from "@/component/shared/ui";
+
+const filterChip =
+  "inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-md border border-[#dbe3de] bg-white px-3.5 py-2.25 text-[12.5px] font-semibold text-[#384955]";
 
 const LeadsFilterRow = () => {
   return (
-    <div className="leads-filter-row">
-      <button
-        className="leads-filter-chip"
-        type="button"
-        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-      >
+    <div className="flex items-center gap-2.5">
+      <button className={filterChip} type="button">
         <ListFilter size={13} strokeWidth={2} /> All Sources
       </button>
-      <button
-        className="leads-filter-chip"
-        type="button"
-        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-      >
+      <button className={filterChip} type="button">
         <Clock size={13} strokeWidth={2} /> All Statuses
       </button>
-      <button
-        className="leads-filter-chip"
-        type="button"
-        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-      >
+      <button className={filterChip} type="button">
         <Calendar size={13} strokeWidth={2} /> September 2026
       </button>
-      <div className="dash-search" style={{ flex: 1 }}>
-        <span className="dash-search-icon" style={{ display: "inline-flex" }}>
+      <div className={dashSearch}>
+        <span className={`${dashSearchIcon} inline-flex`}>
           <Search size={14} strokeWidth={2} />
         </span>
         <input type="text" placeholder="Search leads..." />

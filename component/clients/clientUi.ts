@@ -18,17 +18,16 @@ export const isClientStatus = (value: unknown): value is ClientStatus =>
 export const statusLabel = (status: ClientStatus) =>
   CLIENT_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? status;
 
-export const statusClassName = (status: ClientStatus) => {
-  if (status === "active") return "status-pill-lg status-approved";
-  if (status === "pending") return "status-pill-lg status-waiting";
-  return "status-pill-lg";
+const STATUS_PILL = "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl px-3 py-1 text-[11px] font-bold";
+
+const STATUS_COLORS: Partial<Record<ClientStatus, string>> = {
+  active: "bg-[#e5f6ea] text-[#15803d]",
+  pending: "bg-[#fdf1de] text-[#a35a12]",
+  on_hold: "bg-[#e8eefc] text-[#3457c9]",
+  closed: "bg-[#f1f5f3] text-[#64748b]",
 };
 
-export const statusStyle = (status: ClientStatus) => {
-  if (status === "closed") return { background: "#f1f5f3", color: "#64748b" };
-  if (status === "on_hold") return { background: "#e8eefc", color: "#3457c9" };
-  return undefined;
-};
+export const statusClassName = (status: ClientStatus) => `${STATUS_PILL} ${STATUS_COLORS[status] ?? ""}`;
 
 export const initialsOf = (name: string) =>
   name

@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getReportAction } from "@/app/actions/reports";
 import ReportEditor from "@/component/monthly-reports/ReportEditor";
 import { canReviewReports, canWriteReports } from "@/component/monthly-reports/reportUi";
+import { formErrorBanner } from "@/component/shared/ui";
 
 const EditReportPage = async ({ params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params;
@@ -13,7 +14,7 @@ const EditReportPage = async ({ params }: { params: Promise<{ id: string }> }) =
 
   if (!result.ok || !result.data) {
     return (
-      <div className="form-error-banner" role="alert">
+      <div className={formErrorBanner} role="alert">
         {result.error ?? "Could not load this report."}
       </div>
     );

@@ -4,7 +4,7 @@ import { listClientsAction } from "@/app/actions/clients";
 import { listReportsAction } from "@/app/actions/reports";
 import MonthlyReportsHeader from "@/component/monthly-reports/MonthlyReportsHeader";
 import ReportFilters from "@/component/monthly-reports/ReportFilters";
-import ReportsTable from "@/component/monthly-reports/ReportsTable";
+import ReportsTable, { ReportStats } from "@/component/monthly-reports/ReportsTable";
 import {
   REPORTS_PER_PAGE,
   canDeleteReports,
@@ -14,6 +14,7 @@ import {
   monthRange,
   reportsHref,
 } from "@/component/monthly-reports/reportUi";
+import { formErrorBanner } from "@/component/shared/ui";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -49,7 +50,7 @@ const MonthlyReportsPage = async ({ searchParams }: { searchParams: SearchParams
     return (
       <>
         <MonthlyReportsHeader role={role} />
-        <div className="form-error-banner" role="alert">
+        <div className={formErrorBanner} role="alert">
           {reports.error ?? "Could not load reports."}
         </div>
       </>
@@ -64,6 +65,7 @@ const MonthlyReportsPage = async ({ searchParams }: { searchParams: SearchParams
   return (
     <>
       <MonthlyReportsHeader role={role} />
+      <ReportStats summary={reports.data.summary} filters={{ client, month, status, search }} />
       <ReportFilters
         clients={clients.data?.clients ?? []}
         client={client}

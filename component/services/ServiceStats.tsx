@@ -1,15 +1,14 @@
+import { dashMetricCard, dashMetricLbl, dashMetricVal, dashMetricsGrid, dashPendingSub } from "@/component/shared/ui";
 import { serviceStats } from "./data";
 
 const ServiceStats = () => {
   return (
-    <div className="dash-metrics-grid">
+    <div className={dashMetricsGrid}>
       {serviceStats.map((stat) => (
-        <div className="dash-metric-card" key={stat.label}>
-          <div className="dash-metric-lbl">{stat.label}</div>
-          <div className="dash-metric-val" style={stat.small ? { fontSize: 20 } : undefined}>
-            {stat.value}
-          </div>
-          <div className="dash-pending-sub">{stat.note}</div>
+        <div className={dashMetricCard} key={stat.label}>
+          <div className={dashMetricLbl}>{stat.label}</div>
+          <div className={stat.small ? "mb-2 text-[20px] font-bold text-[#0d1e2c]" : dashMetricVal}>{stat.value}</div>
+          <div className={dashPendingSub}>{stat.note}</div>
         </div>
       ))}
     </div>

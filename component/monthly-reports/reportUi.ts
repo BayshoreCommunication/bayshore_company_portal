@@ -1,4 +1,5 @@
 import type { ReportPeriodType, ReportStatus } from "@/app/actions/reports";
+import { BADGE_COLORS, DOTS, badge } from "@/component/shared/ui";
 
 export const REPORTS_PER_PAGE = 10;
 
@@ -10,10 +11,10 @@ export const STATUS_OPTIONS: { value: ReportStatus; label: string }[] = [
 ];
 
 export const STATUS_BADGES: Record<ReportStatus, { label: string; badge: string; dot: string }> = {
-  draft: { label: "Draft", badge: "badge-draft", dot: "dot-gray" },
-  submitted: { label: "In Review", badge: "badge-review", dot: "dot-amber-sm" },
-  approved: { label: "Approved", badge: "badge-approved", dot: "dot-blue-sm" },
-  published: { label: "Published", badge: "badge-completed", dot: "dot-green" },
+  draft: { label: "Draft", badge: `${badge} ${BADGE_COLORS.draft}`, dot: DOTS.gray },
+  submitted: { label: "In Review", badge: `${badge} ${BADGE_COLORS.review}`, dot: DOTS.amber },
+  approved: { label: "Approved", badge: `${badge} ${BADGE_COLORS.approved}`, dot: DOTS.blue },
+  published: { label: "Published", badge: `${badge} ${BADGE_COLORS.completed}`, dot: DOTS.green },
 };
 
 export const isReportStatus = (value: unknown): value is ReportStatus =>

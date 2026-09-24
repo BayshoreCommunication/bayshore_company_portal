@@ -6,6 +6,7 @@ import RecentReports from "@/component/dashbaord/RecentReports";
 import ClientGrowthChart from "@/component/dashbaord/ClientGrowthChart";
 import ReportStatusDonut from "@/component/dashbaord/ReportStatusDonut";
 import RecentPayments from "@/component/dashbaord/RecentPayments";
+import { dashSideCol } from "@/component/shared/ui";
 
 const DashboardPage = () => {
   return (
@@ -13,15 +14,15 @@ const DashboardPage = () => {
       <DashboardHeader />
       <MetricCards />
 
-      <div className="dash-main-grid" style={{ gridTemplateColumns: "1.6fr 1fr", alignItems: "stretch" }}>
+      <div className="grid grid-cols-[1.6fr_1fr] items-stretch gap-5">
         <SupportTickets />
-        <div className="dash-side-col">
+        <div className={dashSideCol}>
           <UpcomingMeetings />
           <RecentReports />
         </div>
       </div>
 
-      <div className="dash-main-grid" style={{ gridTemplateColumns: "1.6fr 1fr" }}>
+      <div className="grid grid-cols-[1.6fr_1fr] items-start gap-5">
         <ClientGrowthChart />
         <ReportStatusDonut />
       </div>

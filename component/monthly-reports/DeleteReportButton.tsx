@@ -1,45 +1,41 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Trash2 } from "lucide-react";
+import { Loader2, Trash2 } from "lucide-react";
 import { deleteReportAction } from "@/app/actions/reports";
 
+// A red icon button, like the Content list's: confirm, then it spins until the
+// refreshed list drops the row.
 const DeleteReportButton = ({ reportId, name }: { reportId: string; name: string }) => {
   const router = useRouter();
-  const [confirming, setConfirming] = useState(false);
-  const [isPending, startTransition] = useTransition();
+  const [deleting, setDeleting] = useState(false);
 
-  const handleDelete = () =>
-    startTransition(async () => {
-      const result = await deleteReportAction(reportId);
-      if (!result.ok) {
-        toast.error(result.error ?? "Failed to delete report.");
-        setConfirming(false);
-        return;
-      }
-      toast.success("Report deleted successfully");
-      router.refresh();
-    });
-
-  if (!confirming) {
-    return (
-      <button type="button" className="more-btn" aria-label={`Delete ${name}`} title="Delete" onClick={() => setConfirming(true)}>
-        <Trash2 size={14} strokeWidth={2} />
-      </button>
-    );
-  }
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete "${name}"? This can't be undone.`)) return;
+    setDeleting(true);
+    const result = await deleteReportAction(reportId);
+    if (!result.ok) {
+      setDeleting(false);
+      toast.error(result.error ?? "Failed to delete report.");
+      return;
+    }
+    toast.success("Report deleted successfully");
+    router.refresh();
+  };
 
   return (
-    <span className="delete-confirm">
-      <button type="button" className="btn-danger" disabled={isPending} onClick={handleDelete} style={{ padding: "4px 10px", fontSize: 11.5 }}>
-        {isPending ? "Deleting…" : "Delete"}
-      </button>
-      <button type="button" className="btn-draft" disabled={isPending} onClick={() => setConfirming(false)} style={{ padding: "4px 10px", fontSize: 11.5 }}>
-        Cancel
-      </button>
-    </span>
+    <button
+      type="button"
+      onClick={handleDelete}
+      disabled={deleting}
+      aria-busy={deleting}
+      aria-label={`Delete ${name}`}
+      className="inline-flex h-7.5 w-7.5 cursor-pointer items-center justify-center rounded-md border border-[#f0c4c4] bg-white text-[#b42318] hover:border-[#b42318] hover:bg-[#fdecec] disabled:cursor-wait"
+    >
+      {deleting ? <Loader2 size={14} strokeWidth={2.25} className="animate-spin" /> : <Trash2 size={14} strokeWidth={2} />}
+    </button>
   );
 };
 

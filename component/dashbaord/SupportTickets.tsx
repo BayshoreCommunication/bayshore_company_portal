@@ -3,14 +3,24 @@
 import { useState } from "react";
 import { supportTickets, ticketInspector } from "./data";
 import ViewAllLink from "@/component/shared/ViewAllLink";
-
-const statusStyle = (status: string) =>
-  status === "Open" ? { background: "#fbdada", color: "#b91c1c" } : undefined;
+import {
+  MINI_STATUS,
+  btnDraft,
+  btnViewReport,
+  dashPendingSub,
+  miniStatus,
+  miniTd,
+  miniTh,
+  sectionCard,
+  sectionHeader,
+  sectionTitle,
+} from "@/component/shared/ui";
 
 const statusClassName = (status: string) => {
-  if (status === "In Review") return "mini-status pending";
-  if (status === "Resolved") return "mini-status sent";
-  return "mini-status";
+  if (status === "Open") return `${miniStatus} bg-[#fbdada] text-[#b91c1c]`;
+  if (status === "In Review") return `${miniStatus} ${MINI_STATUS.pending}`;
+  if (status === "Resolved") return `${miniStatus} ${MINI_STATUS.sent}`;
+  return miniStatus;
 };
 
 const SupportTickets = () => {
@@ -19,71 +29,58 @@ const SupportTickets = () => {
   );
 
   return (
-    <div className="section-card">
-      <div className="section-header">
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <span
-            style={{
-              width: 8,
-              height: 8,
-              borderRadius: 2,
-              background: "#c8973a",
-              display: "inline-block",
-            }}
-          />
-          <span className="section-title">Client Support &amp; Complaint Tickets</span>
-          <span className="dash-pending-sub" style={{ marginLeft: 2 }}>
-            (Client-submitted queue)
-          </span>
+    <div className={sectionCard}>
+      <div className={sectionHeader}>
+        <div className="flex items-center gap-2">
+          <span className="inline-block h-2 w-2 rounded-xs bg-[#c8973a]" />
+          <span className={sectionTitle}>Client Support &amp; Complaint Tickets</span>
+          <span className={`${dashPendingSub} ml-0.5`}>(Client-submitted queue)</span>
         </div>
         <ViewAllLink label="View All Tickets" />
       </div>
 
-      <div className="ticket-split">
-        <table className="report-mini-table ticket-table">
+      <div className="grid grid-cols-[1.5fr_1fr] items-start gap-4">
+        <table className="w-full border-collapse">
           <thead>
             <tr>
-              <th>Client</th>
-              <th>Subject</th>
-              <th>Status</th>
+              {["Client", "Subject", "Status"].map((heading) => (
+                <th key={heading} className={miniTh}>
+                  {heading}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {supportTickets.map((ticket) => (
               <tr
                 key={ticket.id}
-                className={`ticket-row${ticket.id === selectedId ? " selected" : ""}`}
+                className={`cursor-pointer ${ticket.id === selectedId ? "bg-[#eff6ff]" : "hover:bg-[#f7f9f8]"}`}
                 onClick={() => setSelectedId(ticket.id)}
               >
-                <td>
+                <td className={miniTd}>
                   <b>{ticket.client}</b>
-                  <div className="dash-pending-sub">{ticket.id}</div>
+                  <div className={dashPendingSub}>{ticket.id}</div>
                 </td>
-                <td>{ticket.subject}</td>
-                <td>
-                  <span
-                    className={statusClassName(ticket.status)}
-                    style={statusStyle(ticket.status)}
-                  >
-                    {ticket.status}
-                  </span>
+                <td className={miniTd}>{ticket.subject}</td>
+                <td className={miniTd}>
+                  <span className={statusClassName(ticket.status)}>{ticket.status}</span>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
 
-        <div className="ticket-inspector">
-          <div className="ti-label">
+        <div className="rounded-lg border border-[#eef3ef] bg-[#f7f9f8] p-3.5">
+          <div className="text-[10px] font-bold tracking-[0.5px] text-[#8496a3]">
             TICKET INSPECTOR • {ticketInspector.ticketId}
           </div>
-          <div className="ti-subject">{ticketInspector.subject}</div>
-          <div className="ti-message">{ticketInspector.message}</div>
-          <div className="ti-actions">
-            <button className="btn-view-report" style={{ flex: 1 }}>
-              Update Status
-            </button>
-            <button className="btn-draft" style={{ flex: 1 }}>
+          <div className="mt-1.5 text-[13px] leading-[1.35] font-bold text-[#2563eb]">{ticketInspector.subject}</div>
+          <div className="mt-2.5 max-h-22.5 overflow-y-auto pr-1 text-[11.5px] leading-normal text-[#384955]">
+            {ticketInspector.message}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button className={`${btnViewReport} flex-1`}>Update Status</button>
+            <button className={`${btnDraft} flex-1`}>
               Reply
             </button>
           </div>

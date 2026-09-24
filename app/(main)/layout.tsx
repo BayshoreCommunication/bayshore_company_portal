@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import "../globals.css";
-import "../portal.css";
 import { auth } from "@/auth";
 import Sidebar from "@/component/layout/Sidebar";
 import Topbar from "@/component/layout/Topbar";
@@ -15,11 +14,11 @@ const MainLayout = async ({ children }: { children: React.ReactNode }) => {
   }
 
   return (
-    <div className="app-view">
+    <div className="flex min-h-screen">
       <Sidebar />
-      <div className="workspace">
+      <div className="flex flex-1 flex-col overflow-y-auto">
         <Topbar user={session.user} />
-        <div className="content-area">{children}</div>
+        <div className="flex flex-col gap-4.5 px-9 pt-6 pb-10">{children}</div>
       </div>
     </div>
   );

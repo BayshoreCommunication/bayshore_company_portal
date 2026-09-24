@@ -1,32 +1,31 @@
+import { dashPendingSub, dashSideCol, sideCard, sideHeader, sideSub, sideTitle, sourceDot } from "@/component/shared/ui";
 import { leadSources } from "./data";
 
 const LeadsSidePanel = () => {
   return (
-    <div className="dash-side-col">
-      <div className="side-card">
-        <div className="side-header">
-          <div className="side-title">Lead Sources</div>
-          <div className="side-sub">September, month to date</div>
+    <div className={dashSideCol}>
+      <div className={sideCard}>
+        <div className={sideHeader}>
+          <div className={sideTitle}>Lead Sources</div>
+          <div className={sideSub}>September, month to date</div>
         </div>
-        <div className="lead-source-list">
+        <div className="flex flex-col gap-3">
           {leadSources.map((source) => (
-            <div className="lead-source-row" key={source.label}>
-              <span className="source-dot" style={{ background: source.color }} />
-              <span className="ls-label">{source.label}</span>
-              <div className="ls-bar-track">
-                <div className="ls-bar-fill" style={{ width: source.width, background: source.color }} />
+            <div className="flex items-center gap-2" key={source.label}>
+              <span className={sourceDot} style={{ background: source.color }} />
+              <span className="w-13 shrink-0 text-[12px] font-semibold text-[#17242f]">{source.label}</span>
+              <div className="h-1.5 flex-1 overflow-hidden rounded-[3px] bg-[#eef3ef]">
+                <div className="h-full rounded-[3px]" style={{ width: source.width, background: source.color }} />
               </div>
-              <span className="ls-count">{source.count}</span>
+              <span className="w-5.5 text-right text-[12px] font-bold text-[#17242f]">{source.count}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="side-card">
-        <div className="side-title" style={{ marginBottom: 8 }}>
-          Follow-Up Reminder
-        </div>
-        <div className="dash-pending-sub">
+      <div className={sideCard}>
+        <div className={`${sideTitle} mb-2`}>Follow-Up Reminder</div>
+        <div className={dashPendingSub}>
           3 leads have had no contact logged in over 48 hours — Tyrell Jenkins, Latoya Freeman, and 1 more.
           Consider following up today.
         </div>
