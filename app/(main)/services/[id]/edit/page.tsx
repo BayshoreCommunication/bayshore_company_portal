@@ -1,0 +1,25 @@
+import { notFound, redirect } from "next/navigation";
+import { auth } from "@/auth";
+import { getServiceAction } from "@/app/actions/service";
+import ServiceForm from "@/component/services/ServiceForm";
+import { canManageServices } from "@/component/services/serviceUi";
+
+const EditServicePage = async ({ params }: { params: Promise<{ id: string }> }) => {
+  const { id } = await params;
+  const [session, result] = await Promise.all([auth(), getServiceAction(id)]);
+
+  if (!canManageServices(session?.user?.role)) redirect("/services");
+  if (result.status === 404 || result.status === 422) notFound();
+
+  if (!result.ok || !result.data) {
+    return (
+      <div role="alert" className="rounded-xl border border-[#f5c2c2] bg-[#fdecec] px-4 py-3 text-[12.5px] font-medium text-[#b42318]">
+        {result.error ?? "Could not load this service."} Please refresh the page to try again.
+      </div>
+    );
+  }
+
+  return <ServiceForm service={result.data} />;
+};
+
+export default EditServicePage;

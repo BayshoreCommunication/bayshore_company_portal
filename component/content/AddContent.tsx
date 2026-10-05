@@ -32,9 +32,6 @@ import {
 import { avatarColorFor, initialsOf } from "@/component/clients/clientUi";
 import Picker, { type PickerOption } from "@/component/shared/Picker";
 import {
-  breadcrumbLink,
-  breadcrumbRow,
-  breadcrumbs,
   btnDraft,
   fieldHintPlain,
   fieldLabel,
@@ -45,7 +42,6 @@ import {
   sectionCard,
   textareaBase,
 } from "@/component/shared/ui";
-import { STATUS_BADGES, filesOf, formatDateTime, personNameOf } from "./contentUi";
 import {
   BATCH_OPTIONS,
   type Batch,
@@ -62,11 +58,15 @@ import {
   CONTENT_KINDS,
   CTA_OPTIONS,
   MAX_FILES_PER_SAVE,
+  STATUS_BADGES,
+  filesOf,
+  formatDateTime,
   mediaOf,
+  personNameOf,
   uploadNoun,
   uploadProblem,
   type ContentKind,
-} from "./contentKinds";
+} from "./contentUi";
 
 // ── Choices ──────────────────────────────────────────────────────────────────
 
@@ -916,15 +916,6 @@ const AddContent = ({
 
   return (
     <>
-      <div className={breadcrumbRow}>
-        <div className={breadcrumbs}>
-          <Link href="/content" className={breadcrumbLink}>
-            Content
-          </Link>{" "}
-          / <b>Add Content</b>
-        </div>
-      </div>
-
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <div className={pageTitle}>Add Content</div>

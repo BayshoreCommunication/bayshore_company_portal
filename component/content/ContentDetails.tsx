@@ -42,9 +42,10 @@ import {
   pageTitle,
 } from "@/component/shared/ui";
 import CommentThread from "./CommentThread";
-import { CONTENT_KINDS } from "./contentKinds";
+import GroupPieces from "./GroupPieces";
 import {
   BATCH_TYPE_LABELS,
+  CONTENT_KINDS,
   STATUS_BADGES,
   batchLabelOf,
   clientIdOf,
@@ -53,6 +54,7 @@ import {
   formatDate,
   formatDateTime,
   personNameOf,
+  piecesOf,
 } from "./contentUi";
 
 type Badge = { icon: LucideIcon; color: string; background: string };
@@ -277,6 +279,7 @@ const ContentDetails = ({
   const client = clientNameOf(item.client) || "Unknown client";
   const batchType = item.batchType ?? (item.isIndividual ? "individual" : "monthly");
   const activity = activityOf(item);
+  const pieces = piecesOf(item);
 
   const sendForApproval = () =>
     startTransition(async () => {
@@ -376,6 +379,8 @@ const ContentDetails = ({
           </span>
         </div>
       ) : null}
+
+      {pieces.length > 1 ? <GroupPieces pieces={pieces} currentId={item._id} /> : null}
 
       <div className="grid items-start gap-4.5 min-[1100px]:grid-cols-[minmax(0,1fr)_320px]">
         <div className="flex flex-col gap-4.5">

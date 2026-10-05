@@ -9,8 +9,6 @@ import { deleteContentAction, type ContentItem, type ContentListData } from "@/a
 import { pageItems } from "@/component/shared/pageItems";
 import {
   actionWrap,
-  breadcrumbRow,
-  breadcrumbs,
   btnDraft,
   clientAvatarBadge,
   clientFlex,
@@ -46,18 +44,21 @@ import {
   tableFooter,
 } from "@/component/shared/ui";
 import { avatarColorFor, initialsOf } from "@/component/clients/clientUi";
-import { CONTENT_KINDS, KIND_ORDER } from "./contentKinds";
 import {
   BATCH_TYPE_LABELS,
+  CONTENT_KINDS,
   CONTENT_STATUS_VALUES,
+  KIND_ORDER,
   STATUS_BADGES,
   batchLabelOf,
   clientIdOf,
   clientNameOf,
   contentListHref,
   formatDateTime,
+  groupStatusOf,
   monthChoices,
   personNameOf,
+  piecesOf,
   type ContentListFilters,
 } from "./contentUi";
 
@@ -121,17 +122,24 @@ const ContentList = ({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
+  // A row stands for every piece saved together, so deleting it deletes them all.
   const remove = async (item: ContentItem) => {
-    if (!window.confirm(`Delete "${item.title}"? Its files are deleted too. This can't be undone.`)) return;
+    const pieces = piecesOf(item);
+    const what = pieces.length > 1 ? `all ${pieces.length} pieces of "${item.title}"` : `"${item.title}"`;
+    if (!window.confirm(`Delete ${what}? ${pieces.length > 1 ? "Their" : "Its"} files are deleted too. This can't be undone.`)) return;
     // Stays set on success, so the icon spins until the refreshed list drops the row.
     setDeletingId(item._id);
-    const result = await deleteContentAction(item._id);
-    if (!result.ok) {
-      setDeletingId(null);
-      toast.error(result.error ?? "Couldn't delete this content.");
-      return;
+    for (const piece of pieces) {
+      const result = await deleteContentAction(piece._id);
+      if (!result.ok) {
+        setDeletingId(null);
+        toast.error(result.error ?? "Couldn't delete this content.");
+        // Some pieces may already be gone — show what is left.
+        startTransition(() => router.refresh());
+        return;
+      }
     }
-    toast.success("Content deleted");
+    toast.success(pieces.length > 1 ? `${pieces.length} pieces deleted` : "Content deleted");
     startTransition(() => router.refresh());
   };
   const { items, summary, pagination } = data;
@@ -209,12 +217,6 @@ const ContentList = ({
 
   return (
     <>
-      <div className={breadcrumbRow}>
-        <div className={breadcrumbs}>
-          <b>Content</b>
-        </div>
-      </div>
-
       <div className={pageHeaderRow}>
         <div>
           <div className={pageTitle}>Content</div>
@@ -363,8 +365,13 @@ const ContentList = ({
                 {items.map((item, index) => {
                   const name = clientNameOf(item.client) || "Unknown client";
                   const kind = CONTENT_KINDS[item.type] ?? CONTENT_KINDS.image;
-                  const badge = STATUS_BADGES[item.status];
                   const files = item.files?.length ?? 0;
+                  // Pieces saved together share this row: its first piece leads, the rest are counted.
+                  const pieces = piecesOf(item);
+                  const grouped = pieces.length > 1;
+                  const badge = STATUS_BADGES[groupStatusOf(pieces)];
+                  const approved = pieces.filter((piece) => piece.status === "approved").length;
+                  const kinds = [...new Set(pieces.map((piece) => piece.type))].map((type) => CONTENT_KINDS[type] ?? CONTENT_KINDS.image);
 
                   return (
                     <tr key={item._id} className={reportsTr}>
@@ -380,10 +387,12 @@ const ContentList = ({
                           <div className="min-w-0">
                             <Link href={`/content/${item._id}`} className={`${clientNameText} block truncate no-underline hover:underline`}>
                               {item.title}
+                              {grouped ? <span className="font-medium text-[#7a8e9b]"> +{pieces.length - 1} more</span> : null}
                             </Link>
                             <div className="mt-0.5 text-[11px] text-[#7a8e9b]">
+                              {grouped ? `${pieces.length} pieces · ` : ""}
                               by {personNameOf(item.createdBy) ?? "—"}
-                              {files > 1 ? ` · ${files} files` : ""}
+                              {!grouped && files > 1 ? ` · ${files} files` : ""}
                             </div>
                           </div>
                         </div>
@@ -397,12 +406,19 @@ const ContentList = ({
                         </div>
                       </td>
                       <td className={reportsTd}>
-                        <span
-                          className="inline-block rounded-xl px-2.5 py-0.75 text-[11px] font-bold whitespace-nowrap"
-                          style={{ background: kind.background, color: kind.color }}
-                        >
-                          {kind.label}
-                        </span>
+                        {/* A group can mix kinds: the first two, then how many more. */}
+                        <div className="flex flex-wrap items-center gap-1">
+                          {kinds.slice(0, 2).map((entry) => (
+                            <span
+                              key={entry.label}
+                              className="inline-block rounded-xl px-2.5 py-0.75 text-[11px] font-bold whitespace-nowrap"
+                              style={{ background: entry.background, color: entry.color }}
+                            >
+                              {entry.label}
+                            </span>
+                          ))}
+                          {kinds.length > 2 ? <span className="text-[11px] font-semibold text-[#7a8e9b]">+{kinds.length - 2}</span> : null}
+                        </div>
                       </td>
                       <td className={reportsTd}>
                         <div>{batchLabelOf(item)}</div>
@@ -414,6 +430,11 @@ const ContentList = ({
                         <span className={badge.badge}>
                           <span className={badge.dot} /> {badge.label}
                         </span>
+                        {grouped ? (
+                          <div className="mt-1 text-[11px] text-[#7a8e9b]">
+                            {approved} of {pieces.length} approved
+                          </div>
+                        ) : null}
                       </td>
                       <td className={`${reportsTd} text-[#64748b]`}>{formatDateTime(item.updatedAt)}</td>
                       <td className={reportsTd}>
@@ -421,6 +442,7 @@ const ContentList = ({
                           <Link href={`/content/${item._id}`} className={btnIconAction} aria-label="View content">
                             <Eye size={14} strokeWidth={2} />
                           </Link>
+                          {/* For a group this opens its first piece; the edit page steps through the rest. */}
                           {canWrite ? (
                             <Link href={`/content/edit?id=${item._id}`} className={btnIconAction} aria-label="Edit content">
                               <Pencil size={14} strokeWidth={2} />

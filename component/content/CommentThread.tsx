@@ -5,9 +5,8 @@ import toast from "react-hot-toast";
 import { Download, FileText, Loader2, MessageSquare, Paperclip, Play, Send, X } from "lucide-react";
 import type { ContentComment, ContentFile } from "@/app/actions/content";
 import { initialsOf } from "@/component/clients/clientUi";
-import { formatDateTime, personNameOf } from "./contentUi";
+import { formatDateTime, mediaOf, personNameOf, uploadProblem } from "./contentUi";
 import { Lightbox, MEDIA_ICON, extensionOf, fileSize, type Upload } from "./contentForm";
-import { mediaOf, uploadProblem } from "./contentKinds";
 
 // The backend's CONTENT_COMMENT_MAX_ATTACHMENTS.
 const MAX_ATTACHMENTS = 5;

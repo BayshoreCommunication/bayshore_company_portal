@@ -1,6 +1,9 @@
+import { Suspense } from "react";
 import Link from "next/link";
-import { Bell, CalendarDays, ChevronDown, LogOut, Search, User } from "lucide-react";
+import { CalendarDays, ChevronDown, LogOut, Search, User } from "lucide-react";
 import { signOutAction } from "@/app/actions/auth";
+import { listNotificationsAction } from "@/app/actions/notifications";
+import NotificationBell, { BellPlaceholder } from "./NotificationBell";
 import { roleLabel as labelForRole } from "@/component/shared/roleLabels";
 
 // White, lightly-bordered pill shared by every topbar control (same as the client portal).
@@ -18,6 +21,16 @@ const initialsFromName = (name: string) =>
     .join("") || "?";
 
 const currentMonthLabel = () => new Date().toLocaleDateString("en-US", { month: "long", year: "numeric", timeZone: "UTC" });
+
+// How many notifications the bell's panel lists; the Notifications page has the rest.
+const BELL_LIMIT = 8;
+
+// The bell with its first load done on the server, so the unread badge is right from the
+// first paint. It is streamed in behind a placeholder, so it never holds the page up.
+const LoadedBell = async () => {
+  const result = await listNotificationsAction({ limit: BELL_LIMIT });
+  return <NotificationBell limit={BELL_LIMIT} initial={result.ok ? result.data : undefined} />;
+};
 
 type TopbarUser = {
   name?: string | null;
@@ -45,16 +58,9 @@ const Topbar = ({ user }: { user: TopbarUser }) => {
           <ChevronDown size={14} strokeWidth={2} />
         </div>
 
-        <Link
-          href="/notifications"
-          className={`${boxClass} relative flex w-10 shrink-0 items-center justify-center text-[#17242f] no-underline hover:bg-[#f9fafb]`}
-          aria-label="Notifications"
-        >
-          <Bell size={16} strokeWidth={2} />
-          <span className="absolute -top-0.75 -right-0.75 flex h-4.25 w-4.25 items-center justify-center rounded-full bg-[#dc2626] text-[10px] font-bold text-white">
-            1
-          </span>
-        </Link>
+        <Suspense fallback={<BellPlaceholder />}>
+          <LoadedBell />
+        </Suspense>
 
         {/* A CSS-hover dropdown (Tailwind's `group`); group-focus-within keeps it reachable by keyboard. */}
         <div className="group relative">

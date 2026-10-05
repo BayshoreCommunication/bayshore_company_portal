@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { getReportAction } from "@/app/actions/reports";
-import ReportEditor from "@/component/monthly-reports/ReportEditor";
-import { canReviewReports, canWriteReports } from "@/component/monthly-reports/reportUi";
+import EditReport from "@/component/monthly-reports/EditReport";
 import { formErrorBanner } from "@/component/shared/ui";
 
 const EditReportPage = async ({ params }: { params: Promise<{ id: string }> }) => {
@@ -20,13 +19,7 @@ const EditReportPage = async ({ params }: { params: Promise<{ id: string }> }) =
     );
   }
 
-  const role = session?.user?.role ?? "";
-  const { report } = result.data;
-
-  // Writers can only edit a draft; reviewers can edit at any stage; everyone else just reads.
-  const readOnly = !canWriteReports(role) || (!canReviewReports(role) && report.status !== "draft");
-
-  return <ReportEditor clients={[]} report={report} role={role} userName={session?.user?.name ?? ""} readOnly={readOnly} />;
+  return <EditReport report={result.data.report} role={session?.user?.role ?? ""} userName={session?.user?.name ?? ""} />;
 };
 
 export default EditReportPage;

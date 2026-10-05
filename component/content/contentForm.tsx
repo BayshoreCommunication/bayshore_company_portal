@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { type PickerOption } from "@/component/shared/Picker";
 import { btnDraft } from "@/component/shared/ui";
-import { CONTENT_KINDS, KIND_ORDER, acceptFor, uploadHint, uploadNoun, type ContentKind, type Media } from "./contentKinds";
+import { CONTENT_KINDS, KIND_ORDER, acceptFor, uploadHint, uploadNoun, type ContentKind, type Media } from "./contentUi";
 
 // The pieces of a content form shared by Add Content and Edit Content: the batch
 // choices, a piece's fields, and the upload box with its previews.
@@ -99,7 +99,7 @@ export type Draft = {
   caption: string;
   link: string;
   files: Upload[];
-  // Only some kinds use these — see `fields` in contentKinds.
+  // Only some kinds use these — see `fields` in CONTENT_KINDS (contentUi).
   pageName: string;
   pageUrl: string;
   subject: string;

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { getContentAction, listContentAction } from "@/app/actions/content";
 import ContentDetails from "@/component/content/ContentDetails";
-import { canWriteContent, clientIdOf } from "@/component/content/contentUi";
+import { canWriteContent, clientIdOf, piecesOf } from "@/component/content/contentUi";
 import { breadcrumbLink, breadcrumbRow, breadcrumbs, formErrorBanner } from "@/component/shared/ui";
 
 const RELATED_LIMIT = 5;
@@ -35,9 +35,11 @@ const ContentDetailsPage = async ({ params }: { params: Promise<{ id: string }> 
   }
 
   const item = result.data;
-  // Other pieces prepared for the same client, newest first.
-  const related = await listContentAction({ client: clientIdOf(item.client), limit: RELATED_LIMIT + 1 });
-  const others = (related.data?.items ?? []).filter((other) => other._id !== item._id).slice(0, RELATED_LIMIT);
+  // Other pieces prepared for the same client, newest first — apart from the ones saved
+  // together with this one, which the page lists on their own.
+  const group = piecesOf(item).map((piece) => piece._id);
+  const related = await listContentAction({ client: clientIdOf(item.client), limit: RELATED_LIMIT + group.length });
+  const others = (related.data?.items ?? []).filter((other) => !group.includes(other._id)).slice(0, RELATED_LIMIT);
 
   return (
     <ContentDetails

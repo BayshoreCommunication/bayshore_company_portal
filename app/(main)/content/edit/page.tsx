@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { getContentAction } from "@/app/actions/content";
-import ContentEdit from "@/component/content/ContentEdit";
+import EditContent from "@/component/content/EditContent";
 import { canReviewContent, canWriteContent } from "@/component/content/contentUi";
 import { breadcrumbLink, breadcrumbRow, breadcrumbs, formErrorBanner } from "@/component/shared/ui";
 
@@ -38,7 +38,9 @@ const EditContentPage = async ({ searchParams }: { searchParams: SearchParams })
   if (!result.ok || !result.data) return <Problem message={result.error ?? "Could not load this content."} />;
   if (!canWriteContent(role)) return <Problem message="Your role can view content but not edit it." />;
 
-  return <ContentEdit item={result.data} canReview={canReviewContent(role)} />;
+  // Keyed by the piece: stepping to another piece of the same group starts a fresh form
+  // instead of carrying the last one's fields over.
+  return <EditContent key={result.data._id} item={result.data} canReview={canReviewContent(role)} />;
 };
 
 export default EditContentPage;

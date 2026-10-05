@@ -45,12 +45,27 @@ export interface ContentFile {
   media: ContentMedia;
 }
 
+// What a piece tells its group-mates about itself.
+export interface ContentPiece {
+  _id: string;
+  type: ContentType;
+  title: string;
+  status: ContentStatus;
+  // The piece's first image, when it has one.
+  thumbnail?: string;
+}
+
 export interface ContentItem {
   _id: string;
   // Populated (company name) when read; a plain id when not.
   client: ContentClientRef | string;
   type: ContentType;
   title: string;
+
+  // Pieces saved together on the Add Content page are one item: every piece in this one's
+  // group, in the order added (this piece included). Comes with a single piece and with a
+  // grouped list; a piece saved on its own is a group of one.
+  pieces?: ContentPiece[];
 
   batchMonth: string;
   // Older records may not have it — read those from isIndividual.
@@ -159,6 +174,8 @@ export async function listContentAction(
     batchType?: ContentBatchType;
     individual?: boolean;
     search?: string;
+    // One item per group of pieces saved together (its first piece, with `pieces`), not one per piece.
+    grouped?: boolean;
   } = {},
 ): Promise<ContentActionResult<ContentListData>> {
   const accessToken = await token();
@@ -176,6 +193,7 @@ export async function listContentAction(
     if (params.batchType) query.set("batchType", params.batchType);
     if (params.individual !== undefined) query.set("individual", String(params.individual));
     if (params.search?.trim()) query.set("q", params.search.trim());
+    if (params.grouped) query.set("grouped", "true");
 
     const response = await fetch(`${API}?${query}`, {
       headers: authorised(accessToken),

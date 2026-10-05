@@ -137,25 +137,22 @@ const ClientForm = ({ client }: { client?: Client }) => {
 
   return (
     <>
-      <div className={breadcrumbRow}>
-        <div className={breadcrumbs}>
-          <Link href="/clients" className={breadcrumbLink}>
-            Clients
-          </Link>{" "}
-          / {client ? (
-            <>
-              <Link href={`/clients/${client._id}`} className={breadcrumbLink}>
-                {client.companyName}
-              </Link>{" "}
-              / <b>Edit</b>
-            </>
-          ) : (
-            <b>Add Client</b>
-          )}
+      {client ? (
+        <div className={breadcrumbRow}>
+          <div className={breadcrumbs}>
+            <Link href="/clients" className={breadcrumbLink}>
+              Clients
+            </Link>{" "}
+            /{" "}
+            <Link href={`/clients/${client._id}`} className={breadcrumbLink}>
+              {client.companyName}
+            </Link>{" "}
+            / <b>Edit</b>
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      <div className="mb-5">
+      <div>
         <div className={pageTitle}>{isEdit ? "Edit Client" : "Add New Client"}</div>
         <div className={pageDesc}>
           {isEdit

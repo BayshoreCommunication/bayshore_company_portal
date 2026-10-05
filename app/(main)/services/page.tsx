@@ -1,25 +1,40 @@
-import ServicesHeader from "@/component/services/ServicesHeader";
-import ServiceStats from "@/component/services/ServiceStats";
-import ServiceCategoryCard from "@/component/services/ServiceCategoryCard";
-import ServicesSidePanel from "@/component/services/ServicesSidePanel";
-import { serviceCategories } from "@/component/services/data";
-import { dashSideCol } from "@/component/shared/ui";
+import { auth } from "@/auth";
+import { listClientsAction } from "@/app/actions/clients";
+import { getClientServicesAction, listServicesAction } from "@/app/actions/service";
+import ServicesList from "@/component/services/ServicesList";
+import { canAssignServices, canManageServices } from "@/component/services/serviceUi";
 
-const ServicesPage = () => {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
+
+// The backend's page-size cap — the client picker offers this many clients.
+const CLIENT_OPTIONS_LIMIT = 100;
+
+// ?client=<id> shows that client's services and monthly payment; without it, the catalog.
+// The catalog is loaded either way: the client's view needs it to offer more services.
+const ServicesPage = async ({ searchParams }: { searchParams: SearchParams }) => {
+  const params = await searchParams;
+  const clientId = first(params.client) ?? "all";
+
+  const [session, clients, catalog, clientServices] = await Promise.all([
+    auth(),
+    listClientsAction({ limit: CLIENT_OPTIONS_LIMIT }),
+    listServicesAction(),
+    clientId === "all" ? null : getClientServicesAction(clientId),
+  ]);
+
   return (
-    <>
-      <ServicesHeader />
-      <ServiceStats />
-
-      <div className="grid grid-cols-[2.2fr_1fr] items-start gap-5">
-        <div className={dashSideCol}>
-          {serviceCategories.map((category) => (
-            <ServiceCategoryCard category={category} key={category.key} />
-          ))}
-        </div>
-        <ServicesSidePanel />
-      </div>
-    </>
+    <ServicesList
+      catalog={catalog.ok ? catalog.data : undefined}
+      catalogError={catalog.error}
+      clientServices={clientServices?.ok ? clientServices.data : undefined}
+      clientError={clientServices?.error}
+      clients={(clients.data?.clients ?? []).map(({ _id, companyName }) => ({ _id, companyName }))}
+      clientId={clientId}
+      canManage={canManageServices(session?.user?.role)}
+      canAssign={canAssignServices(session?.user?.role)}
+    />
   );
 };
 
