@@ -6,14 +6,10 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
   ArrowLeft,
-  CalendarDays,
   CheckCircle2,
-  Clock,
   Download,
   ExternalLink,
   FileText,
-  History,
-  Info,
   Layers,
   Link2,
   Loader2,
@@ -25,7 +21,6 @@ import {
   SendHorizontal,
   X,
   Tag,
-  User,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -37,12 +32,8 @@ import {
 } from "@/app/actions/content";
 import { avatarColorFor, initialsOf } from "@/component/clients/clientUi";
 import {
-  breadcrumbLink,
-  breadcrumbRow,
-  breadcrumbs,
   btnDraft,
   btnPrimary,
-  dashPendingSub,
   pageTitle,
 } from "@/component/shared/ui";
 import CommentThread from "./CommentThread";
@@ -51,14 +42,12 @@ import GroupPieces from "./GroupPieces";
 import RevisionHistory, { PREVIEW_ANCHOR, ownRevisionsOf } from "./RevisionHistory";
 import RevisionReply from "./RevisionReply";
 import {
-  BATCH_TYPE_LABELS,
   CONTENT_KINDS,
   STATUS_BADGES,
   batchLabelOf,
   clientIdOf,
   clientNameOf,
   formatDate,
-  formatDateTime,
   personNameOf,
   piecesOf,
   revisionNoteOf,
@@ -73,10 +62,22 @@ const BLUE: Omit<Badge, "icon"> = { color: "#2563eb", background: "#dbeafe" };
 
 const iconText = "inline-flex items-center gap-1.5";
 
-// A section: icon + title header, then the body.
-const Card = ({ badge, title, aside, children }: { badge: Badge; title: string; aside?: ReactNode; children: ReactNode }) => (
+// A section: icon + title header, then the body. `divided` draws a line under the header.
+const Card = ({
+  badge,
+  title,
+  aside,
+  divided = false,
+  children,
+}: {
+  badge: Badge;
+  title: string;
+  aside?: ReactNode;
+  divided?: boolean;
+  children: ReactNode;
+}) => (
   <section className="rounded-[10px] border border-[#dbe3de] bg-white">
-    <div className="flex items-center justify-between gap-3 px-5 pt-4">
+    <div className={`flex items-center justify-between gap-3 px-5 pt-4 ${divided ? "border-b border-[#eef3ef] pb-3.5" : ""}`}>
       <div className="flex items-center gap-2.5">
         <span
           className="inline-flex h-7.5 w-7.5 shrink-0 items-center justify-center rounded-[7px]"
@@ -113,13 +114,13 @@ const stageClass = "rounded-xl border border-[#d6e0f1] bg-[#eaf0fa]";
 
 // One stored file, as large as it reads well: the image, a playable video, the PDF — or a
 // download panel for documents the browser can't show.
-const FileView = ({ file, title }: { file: ContentFile; title: string }) => {
+const FileView = ({ file, title, poster }: { file: ContentFile; title: string; poster?: string }) => {
   if (file.media === "image") {
     // eslint-disable-next-line @next/next/no-img-element
     return <img src={file.url} alt={file.name || title} className="block max-h-[60vh] w-full rounded-lg object-contain" />;
   }
   if (file.media === "video") {
-    return <video src={file.url} controls className="block max-h-[60vh] w-full rounded-lg bg-black" />;
+    return <video src={file.url} controls poster={poster} className="block max-h-[60vh] w-full rounded-lg bg-black" />;
   }
   if (isPdf(file)) {
     return (
@@ -252,7 +253,20 @@ const LinkView = ({ link, type, large }: { link: string; type: { label: string; 
 // A small thumbnail to switch between the files on show. One the client sent with their
 // revision request carries a red "CLIENT" strip; one that is the earlier version — replaced
 // during a revision, or the piece as it stood when the client asked — is washed in yellow.
-const Thumb = ({ file, active, from, onClick }: { file: ContentFile; active: boolean; from?: "client" | "previous"; onClick: () => void }) => {
+const Thumb = ({
+  file,
+  active,
+  from,
+  poster,
+  onClick,
+}: {
+  file: ContentFile;
+  active: boolean;
+  from?: "client" | "previous";
+  // The video's cover image, when the piece has one.
+  poster?: string;
+  onClick: () => void;
+}) => {
   const [on, off] =
     from === "client" ? ["border-[#dc2626]", "border-[#f3a4a4]"] : from === "previous" ? ["border-[#ca8a04]", "border-[#eab308]"] : ["border-[#2563eb]", "border-transparent"];
   const border = active ? on : off;
@@ -269,7 +283,12 @@ const Thumb = ({ file, active, from, onClick }: { file: ContentFile; active: boo
         <img src={file.url} alt="" className="h-full w-full object-cover" />
       ) : file.media === "video" ? (
         <>
-          <video src={file.url} muted preload="metadata" className="h-full w-full bg-black object-cover" />
+          {poster ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={poster} alt="" className="h-full w-full object-cover" />
+          ) : (
+            <video src={file.url} muted preload="metadata" className="h-full w-full bg-black object-cover" />
+          )}
           <span className="absolute inset-0 flex items-center justify-center text-white">
             <Play size={16} strokeWidth={2} fill="currentColor" />
           </span>
@@ -310,6 +329,8 @@ const Preview = ({ item, asked }: { item: ContentItem; asked?: ContentRevision }
   const all = [...sent, ...latest, ...earlier, ...previous];
   const [selected, setSelected] = useState(0);
   const type = CONTENT_KINDS[item.type] ?? CONTENT_KINDS.image;
+  // The cover for the piece's own videos (not for a video the client sent).
+  const poster = item.videoThumbnail?.url;
   const index = Math.min(selected, all.length - 1);
   const current = all[index];
   // Where each run of files starts in the strip.
@@ -364,7 +385,7 @@ const Preview = ({ item, asked }: { item: ContentItem; asked?: ContentRevision }
             </div>
           ) : null}
           {/* Keyed by file, so switching shows the new one at once instead of the last one under a new label. */}
-          <FileView key={current.url} file={current} title={item.title} />
+          <FileView key={current.url} file={current} title={item.title} poster={fromClient ? undefined : poster} />
         </div>
       ) : null}
 
@@ -379,13 +400,14 @@ const Preview = ({ item, asked }: { item: ContentItem; asked?: ContentRevision }
               key={file.url}
               file={file}
               from={sent.length > 0 ? "previous" : undefined}
+              poster={poster}
               active={latestAt + at === index}
               onClick={() => setSelected(latestAt + at)}
             />
           ))}
           {earlier.length > 0 ? stripDivider : null}
           {earlier.map((file, at) => (
-            <Thumb key={file.url} file={file} from="previous" active={earlierAt + at === index} onClick={() => setSelected(earlierAt + at)} />
+            <Thumb key={file.url} file={file} from="previous" poster={poster} active={earlierAt + at === index} onClick={() => setSelected(earlierAt + at)} />
           ))}
           {previous.length > 0 && previousAt > 0 ? stripDivider : null}
           {previous.map((file, at) => (
@@ -395,6 +417,24 @@ const Preview = ({ item, asked }: { item: ContentItem; asked?: ContentRevision }
             {index + 1} of {all.length}
           </span>
         </div>
+      ) : null}
+
+      {/* The video's cover, on its own too: once the video plays, the player no longer shows it. */}
+      {item.videoThumbnail ? (
+        <a
+          href={item.videoThumbnail.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 rounded-xl border border-[#e1eae5] bg-[#fafcfb] p-3 text-inherit no-underline hover:bg-[#f4f7f5]"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={item.videoThumbnail.url} alt="" className="h-14 w-24 shrink-0 rounded-lg bg-[#eef3ef] object-cover" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-[12.5px] font-bold text-[#0d1e2c]">Video thumbnail</span>
+            <span className="block truncate text-[11.5px] text-[#7a8e9b]">{item.videoThumbnail.name || "Cover image"}</span>
+          </span>
+          <ExternalLink size={15} strokeWidth={2} className="shrink-0 text-[#556977]" />
+        </a>
       ) : null}
 
       {item.link ? <LinkView link={item.link} type={type} large={!current} /> : null}
@@ -409,50 +449,6 @@ const Preview = ({ item, asked }: { item: ContentItem; asked?: ContentRevision }
       ) : null}
     </div>
   );
-};
-
-const DetailRow = ({ icon: Icon, label, children }: { icon: LucideIcon; label: string; children: ReactNode }) => (
-  <div className="flex items-center justify-between gap-3 border-b border-[#f2f5f3] py-2.5 text-[12px] first:pt-0 last:border-b-0 last:pb-0">
-    <span className="inline-flex items-center gap-1.75 text-[#7a8e9b]">
-      <Icon size={14} strokeWidth={2} /> {label}
-    </span>
-    <span className="text-right font-semibold text-[#17242f]">{children}</span>
-  </div>
-);
-
-type Activity = { title: string; sub: string; color: string };
-
-// What has happened to this piece so far, oldest first.
-const activityOf = (item: ContentItem, status: ContentStatus = item.status, submittedAt = item.submittedAt): Activity[] => {
-  const events: Activity[] = [
-    {
-      title: "Created",
-      sub: `${formatDateTime(item.createdAt)} · ${personNameOf(item.createdBy) ?? "—"}`,
-      color: "#94a3b8",
-    },
-  ];
-  if (submittedAt)
-    events.push({
-      title: "Sent for approval",
-      sub: formatDateTime(submittedAt),
-      color: "#d97706",
-    });
-  const clientNote = [...item.comments].reverse().find((comment) => comment.author === "client");
-  if (status === "revision_requested" && clientNote) {
-    events.push({
-      title: "Revision requested",
-      sub: `${formatDateTime(clientNote.createdAt)} · ${clientNote.name ?? "Client"}`,
-      color: "#dc2626",
-    });
-  }
-  if (status === "approved") {
-    events.push({
-      title: "Approved by client",
-      sub: `${formatDateTime(item.approvedAt)} · ${personNameOf(item.approvedBy) ?? "Client"}`,
-      color: "#16a34a",
-    });
-  }
-  return events;
 };
 
 // Sending for approval and commenting go to the API; the page then reloads
@@ -472,8 +468,6 @@ const ContentDetails = ({
   const { status, comments } = item;
   const type = CONTENT_KINDS[item.type] ?? CONTENT_KINDS.image;
   const client = clientNameOf(item.client) || "Unknown client";
-  const batchType = item.batchType ?? (item.isIndividual ? "individual" : "monthly");
-  const activity = activityOf(item);
   const pieces = piecesOf(item);
   const ownRevisions = ownRevisionsOf(pieces, item._id, comments);
   const revisionNote = revisionNoteOf(item);
@@ -537,15 +531,6 @@ const ContentDetails = ({
 
   return (
     <>
-      <div className={breadcrumbRow}>
-        <div className={breadcrumbs}>
-          <Link href="/content" className={breadcrumbLink}>
-            Content
-          </Link>{" "}
-          / <b>{item.title}</b>
-        </div>
-      </div>
-
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <div className={pageTitle}>{item.title}</div>
@@ -637,96 +622,16 @@ const ContentDetails = ({
 
         {/* Stays in view while the piece on the left is scrolled; on a short screen it scrolls on its own. */}
         <div className="flex flex-col gap-4.5 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:max-h-[calc(100vh-2rem)] min-[1100px]:overflow-y-auto min-[1100px]:pb-1">
-          <Card badge={{ icon: MessagesSquare, ...BLUE }} title="Messages" aside={<Count>{threadOf(pieces, item._id, comments).length}</Count>}>
+          <Card badge={{ icon: MessagesSquare, ...BLUE }} title="Messages" divided aside={<Count>{threadOf(pieces, item._id, comments).length}</Count>}>
             <CommentThread
               contentId={item._id}
               pieces={pieces}
               comments={comments}
               clientName={client}
               canComment={canWrite}
-              maxHeight="max-h-[320px]"
+              height="h-60"
               onPosted={() => router.refresh()}
             />
-          </Card>
-
-          <Card badge={{ icon: Info, ...GRAY }} title="Details">
-            <DetailRow icon={User} label="Client">
-              {client}
-            </DetailRow>
-            <DetailRow icon={type.icon} label="Type">
-              {type.label}
-            </DetailRow>
-            <DetailRow icon={CalendarDays} label="Batch">
-              {BATCH_TYPE_LABELS[batchType]} · {item.batchMonth}
-            </DetailRow>
-            {batchType === "weekly" && item.weekStart ? (
-              <DetailRow icon={CalendarDays} label="Week">
-                {batchLabelOf(item).replace("Week of ", "")}
-              </DetailRow>
-            ) : null}
-            {batchType === "event" ? (
-              <DetailRow icon={CalendarDays} label="Event">
-                {item.eventName ?? "—"}
-                {item.eventDate ? ` · ${formatDate(item.eventDate)}` : ""}
-              </DetailRow>
-            ) : null}
-            {item.pageName ? (
-              <DetailRow icon={FileText} label="Page">
-                {item.pageUrl ? (
-                  <a
-                    href={item.pageUrl.startsWith("http") ? item.pageUrl : `https://${item.pageUrl}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#2563eb]"
-                  >
-                    {item.pageName}
-                  </a>
-                ) : (
-                  item.pageName
-                )}
-              </DetailRow>
-            ) : null}
-            {item.subject ? (
-              <DetailRow icon={Mail} label="Subject">
-                {item.subject}
-              </DetailRow>
-            ) : null}
-            {item.headline ? (
-              <DetailRow icon={Tag} label="Headline">
-                {item.headline}
-              </DetailRow>
-            ) : null}
-            {item.cta ? (
-              <DetailRow icon={SendHorizontal} label="Button">
-                {item.cta}
-              </DetailRow>
-            ) : null}
-            <DetailRow icon={CheckCircle2} label="Status">
-              <StatusBadge status={status} />
-            </DetailRow>
-            <DetailRow icon={Pencil} label="Created by">
-              {personNameOf(item.createdBy) ?? "—"}
-            </DetailRow>
-            <DetailRow icon={Clock} label="Last updated">
-              {formatDate(item.updatedAt)}
-            </DetailRow>
-          </Card>
-
-          <Card badge={{ icon: History, ...GRAY }} title="Activity">
-            <div className="relative flex flex-col gap-4 before:absolute before:top-1.5 before:bottom-1.5 before:left-1.25 before:w-0.5 before:bg-[#eef3ef]">
-              {activity.map((event) => (
-                <div className="relative flex gap-3" key={event.title}>
-                  <span
-                    className="relative mt-0.75 h-3 w-3 shrink-0 rounded-full shadow-[0_0_0_3px_white]"
-                    style={{ background: event.color }}
-                  />
-                  <div>
-                    <div className="text-[12.5px] font-semibold text-[#17242f]">{event.title}</div>
-                    <div className={dashPendingSub}>{event.sub}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </Card>
 
           {related.length > 0 ? (

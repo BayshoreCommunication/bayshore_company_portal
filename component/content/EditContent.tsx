@@ -39,7 +39,20 @@ import {
 } from "@/component/shared/ui";
 import CommentThread from "./CommentThread";
 import GroupPieces from "./GroupPieces";
-import { BATCH_OPTIONS, type Batch, type Draft, type Upload, UploadBox, monthOptions, weekLabel, weekOptions } from "./contentForm";
+import { extendPiece, sliceFiles } from "./upload";
+import {
+  BATCH_OPTIONS,
+  type Batch,
+  type Draft,
+  ThumbnailField,
+  type Upload,
+  UploadBox,
+  monthOptions,
+  takesThumbnail,
+  toThumbnail,
+  weekLabel,
+  weekOptions,
+} from "./contentForm";
 import {
   CONTENT_KINDS,
   CTA_OPTIONS,
@@ -82,6 +95,9 @@ const draftOf = (item: ContentItem): Draft => ({
   caption: item.caption ?? "",
   link: item.link ?? "",
   files: filesOf(item).map((file) => ({ name: file.name, size: file.size, url: file.url, media: file.media, mime: file.mimeType })),
+  thumbnail: item.videoThumbnail
+    ? { name: item.videoThumbnail.name, size: item.videoThumbnail.size, url: item.videoThumbnail.url, media: "image", mime: item.videoThumbnail.mimeType }
+    : null,
   pageName: item.pageName ?? "",
   pageUrl: item.pageUrl ?? "",
   subject: item.subject ?? "",
@@ -173,7 +189,9 @@ const EditContent = ({ item, canReview }: { item: ContentItem; canReview: boolea
     eventName !== (item.eventName ?? "") ||
     eventDate !== dayOf(item.eventDate) ||
     reason !== (item.sentReason ?? "");
-  const dirty = detailsChanged || batchChanged || removed.length > 0 || newFiles.length > 0;
+  // A new cover picked, or the stored one taken off.
+  const thumbnailChanged = (draft.thumbnail?.url ?? "") !== (original.thumbnail?.url ?? "");
+  const dirty = detailsChanged || batchChanged || removed.length > 0 || newFiles.length > 0 || thumbnailChanged;
 
   // Ask before leaving with unsaved changes.
   useEffect(() => {
@@ -222,9 +240,7 @@ const EditContent = ({ item, canReview }: { item: ContentItem; canReview: boolea
   const pickFiles = (picked: File[]) => {
     const uploads = toUploads(picked);
     if (!uploads.length) return;
-    const room = spec.maxFiles - draft.files.length;
-    if (uploads.length > room) setError(`Up to ${spec.maxFiles} files per piece — only the first ${Math.max(0, room)} were added.`);
-    setDraft((current) => ({ ...current, files: [...current.files, ...uploads].slice(0, spec.maxFiles) }));
+    setDraft((current) => ({ ...current, files: [...current.files, ...uploads] }));
   };
 
   const replaceFile = (index: number, file: File) => {
@@ -237,6 +253,13 @@ const EditContent = ({ item, canReview }: { item: ContentItem; canReview: boolea
   const removeFile = (index: number) => {
     dropStored(draft.files[index]);
     patch({ files: draft.files.filter((_, i) => i !== index) });
+  };
+
+  const pickThumbnail = (file: File) => {
+    const picked = toThumbnail(file);
+    if ("problem" in picked) return setError(picked.problem);
+    previewUrls.current.push(picked.upload.url);
+    patch({ thumbnail: picked.upload });
   };
 
   const discard = () => {
@@ -295,15 +318,35 @@ const EditContent = ({ item, canReview }: { item: ContentItem; canReview: boolea
     }
     if (batch === "individual") form.set("sentReason", reason.trim());
     if (removed.length) form.set("removeFiles", JSON.stringify(removed));
-    for (const upload of newFiles) if (upload.file) form.append("files", upload.file, upload.name);
+    // A long list of new files goes up in turns: the first lot with the changes, the rest after.
+    const [head = [], ...rest] = sliceFiles(newFiles);
+    for (const upload of head) if (upload.file) form.append("files", upload.file, upload.name);
+    if (draft.thumbnail?.file) form.append("thumbnail", draft.thumbnail.file, draft.thumbnail.name);
+    else if (thumbnailChanged) form.set("removeThumbnail", "true");
+    const headBytes = head.reduce((sum, upload) => sum + upload.size, 0) + (draft.thumbnail?.file?.size ?? 0);
+    const totalBytes = Math.max(1, headBytes + rest.flat().reduce((sum, upload) => sum + upload.size, 0));
+    let sentBytes = 0;
+    const showProgress = (bytes: number, percent: number) => setUploadProgress(Math.round(((sentBytes + (bytes * percent) / 100) / totalBytes) * 100));
 
     setSavingAs(andSend ? "send" : thenNext ? "next" : "save");
     setUploadProgress(0);
     try {
       if (dirty) {
-        const { status, body } = await uploadChanges(item._id, form, setUploadProgress);
+        const { status, body } = await uploadChanges(item._id, form, (percent) => showProgress(headBytes, percent));
         if (status < 200 || status >= 300) {
           setError([body.message, ...(body.errors ?? [])].filter(Boolean).join(" — "));
+          return;
+        }
+        sentBytes = headBytes;
+        const failed = await extendPiece(item._id, rest, showProgress, (bytes) => {
+          sentBytes += bytes;
+        });
+        if (failed) {
+          // The piece is saved; the form here no longer matches it, so carry on from its page.
+          toast.error(`Saved, but ${failed.left.flat().length} of the new files didn't upload: ${failed.problem} Edit the piece again to add them.`);
+          setLeaving(true);
+          router.push(`/content/${item._id}`);
+          router.refresh();
           return;
         }
       }
@@ -557,6 +600,8 @@ const EditContent = ({ item, canReview }: { item: ContentItem; canReview: boolea
                   </div>
                   <UploadBox kind={kind} files={draft.files} onPick={pickFiles} onReplace={replaceFile} onRemove={removeFile} />
                 </div>
+
+                {takesThumbnail(kind) ? <ThumbnailField thumbnail={draft.thumbnail} onPick={pickThumbnail} onRemove={() => patch({ thumbnail: null })} /> : null}
 
                 {spec.linkPlaceholder && !draft.files.length ? (
                   <div className="relative">

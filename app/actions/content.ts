@@ -128,11 +128,15 @@ export interface ContentItem {
   revisionCount?: number;
   revisions?: ContentRevision[];
 
-  // Up to 10 files, and/or a pasted link (video, blog, website, email).
+  // Any number of files, and/or a pasted link (video, blog, website, email).
   files?: ContentFile[];
   link?: string;
   // Files replaced during a revision, newest first. `files` is always the piece as it stands.
   previousFiles?: ContentPreviousFile[];
+  // The cover image for the piece's video — one per piece, for the kinds that take video.
+  videoThumbnail?: ContentFile;
+  // Shared by pieces saved together on the Add Content page.
+  group?: string;
   pageName?: string;
   pageUrl?: string;
   subject?: string;

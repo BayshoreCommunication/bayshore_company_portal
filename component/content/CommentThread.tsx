@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { Download, FileText, Loader2, MessageSquare, Paperclip, Play, Send, X } from "lucide-react";
+import { Download, FileText, Loader2, Paperclip, Play, Send, X } from "lucide-react";
 import type { ContentComment, ContentFile, ContentPiece } from "@/app/actions/content";
-import { initialsOf } from "@/component/clients/clientUi";
 import { formatDateTime, mediaOf, personNameOf, threadOf, uploadProblem } from "./contentUi";
 import { Lightbox, MEDIA_ICON, extensionOf, fileSize, type Upload } from "./contentForm";
 
@@ -37,15 +36,15 @@ export const postComment = (contentId: string, form: FormData, onProgress: (perc
   });
 
 // A comment's files: images and videos as small tiles, documents as chips. Any of
-// them opens full size.
-const Attachments = ({ files, onOpen }: { files: ContentFile[]; onOpen: (index: number) => void }) => {
+// them opens full size. `end` lines them up on the right, under the team's own messages.
+const Attachments = ({ files, end = false, onOpen }: { files: ContentFile[]; end?: boolean; onOpen: (index: number) => void }) => {
   const visual = files.map((file, index) => ({ file, index })).filter(({ file }) => file.media !== "doc");
   const docs = files.map((file, index) => ({ file, index })).filter(({ file }) => file.media === "doc");
 
   return (
-    <div className="mt-1.5 flex flex-col gap-1.5">
+    <div className={`mt-1.5 flex max-w-[88%] flex-col gap-1.5 ${end ? "items-end" : "items-start"}`}>
       {visual.length ? (
-        <div className="flex flex-wrap gap-1.5">
+        <div className={`flex flex-wrap gap-1.5 ${end ? "justify-end" : ""}`}>
           {visual.map(({ file, index }) => (
             <button
               key={file.url}
@@ -102,8 +101,10 @@ const Attachments = ({ files, onOpen }: { files: ContentFile[]; onOpen: (index: 
   );
 };
 
-// The conversation on a piece — the client on the left, the team on the right: every message
-// with its attachments, and a box to write, reply, and attach images, videos or documents.
+// The conversation on a piece, laid out like a chat — the same way the client sees it in
+// their portal, from the other side: the client on the left, the team on the right. Every
+// message with its attachments, and a box to write, reply, and attach images, videos or
+// documents: one field with the attach button inside it, and a send button beside it.
 // A client's request for changes carries the revision it belongs to. Pieces saved together
 // share one conversation: the messages written on the others (`pieces`) are shown in with
 // this one's, each saying which piece it is about. What is written here goes on this piece.
@@ -113,7 +114,7 @@ const CommentThread = ({
   comments: initialComments,
   clientName,
   canComment,
-  maxHeight = "max-h-96",
+  height = "max-h-96",
   onPosted,
 }: {
   contentId: string;
@@ -123,8 +124,8 @@ const CommentThread = ({
   comments: ContentComment[];
   clientName: string;
   canComment: boolean;
-  // How tall the list grows before it scrolls.
-  maxHeight?: string;
+  // How tall the list is, or grows before it scrolls.
+  height?: string;
   // After a comment is saved — e.g. to refresh counts elsewhere on the page.
   onPosted?: () => void;
 }) => {
@@ -154,6 +155,11 @@ const CommentThread = ({
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
   }, [thread.length]);
+
+  // Once what was typed has been sent (and cleared), the field shrinks back to one line.
+  useEffect(() => {
+    if (!text && boxRef.current) boxRef.current.style.height = "";
+  }, [text]);
 
   // Free preview URLs when files leave the box or the page closes.
   const pickedRef = useRef(picked);
@@ -238,94 +244,76 @@ const CommentThread = ({
   return (
     <div>
       {thread.length ? (
-        <div ref={threadRef} className={`flex ${maxHeight} flex-col gap-3 overflow-y-auto pr-1`}>
+        <div ref={threadRef} className={`-mr-1.5 flex ${height} flex-col gap-3.5 overflow-y-auto pr-1.5`}>
           {thread.map((entry, index) => {
-            const fromClient = entry.author === "client";
+            // The team's side sits on the right, the client's on the left.
+            const fromTeam = entry.author !== "client";
             const author = authorOf(entry);
             const files = entry.attachments ?? [];
             return (
-              <div key={`${entry.createdAt}-${index}`} className={`flex gap-2 ${fromClient ? "" : "flex-row-reverse"}`}>
-                <span
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${
-                    fromClient ? "bg-[#2563eb]" : "bg-[#0f1c2a]"
-                  }`}
-                >
-                  {initialsOf(author)}
-                </span>
-                {/* The client's side sits on the left, the team's on the right. */}
-                <div className={`flex min-w-0 flex-1 flex-col ${fromClient ? "items-start" : "items-end"}`}>
+              <div key={`${entry.createdAt}-${index}`} className={`flex flex-col ${fromTeam ? "items-end" : "items-start"}`}>
+                <div className={`mb-1 flex max-w-full flex-wrap items-center gap-1.5 text-[10.5px] ${fromTeam ? "justify-end" : ""}`}>
+                  <span className="font-bold text-[#172632]">{author}</span>
+                  {fromTeam ? null : <span className="rounded bg-[#dbeafe] px-1.5 py-px text-[9.5px] font-bold text-[#1d4ed8]">Client</span>}
+                  {entry.revision ? (
+                    <span className="rounded bg-[#fde8e8] px-1.5 py-px text-[9.5px] font-bold text-[#b91c1c]">
+                      {entry.asks ? "Revision request" : "Revision"} {entry.revision}
+                    </span>
+                  ) : null}
+                  {/* Which piece of the group the message is about; another piece's opens it. */}
+                  {!grouped ? null : entry.piece._id === contentId ? (
+                    <span className="rounded bg-[#eef3ef] px-1.5 py-px text-[9.5px] font-bold text-[#556977]">Piece {entry.at + 1} · this piece</span>
+                  ) : (
+                    <Link
+                      href={`/content/${entry.piece._id}`}
+                      title={entry.piece.title}
+                      className="max-w-44 truncate rounded bg-[#eef3ef] px-1.5 py-px text-[9.5px] font-bold text-[#556977] no-underline hover:bg-[#dbeafe] hover:text-[#1d4ed8]"
+                    >
+                      Piece {entry.at + 1} · {entry.piece.title}
+                    </Link>
+                  )}
+                  <span className="text-[#8496a3]">{formatDateTime(entry.createdAt)}</span>
+                  {canComment ? (
+                    <button type="button" onClick={() => startReply(author)} className="cursor-pointer font-semibold text-[#2563eb] hover:underline">
+                      Reply
+                    </button>
+                  ) : null}
+                </div>
+                {entry.text ? (
                   <div
-                    className={`max-w-[92%] rounded-lg border px-2.75 py-2 ${
-                      fromClient ? "rounded-tl-sm border-[#dbeafe] bg-[#f5f9ff]" : "rounded-tr-sm border-[#e3eae6] bg-[#f4f7f5]"
+                    className={`max-w-[88%] rounded-2xl px-3.5 py-2 text-[12.5px] leading-normal whitespace-pre-line wrap-anywhere ${
+                      fromTeam ? "rounded-tr-sm bg-[#2563eb] text-white" : "rounded-tl-sm bg-[#f1f4f2] text-[#33434f]"
                     }`}
                   >
-                    <div className="flex flex-wrap items-center gap-x-1.5 text-[11px]">
-                      <span className="font-bold text-[#172632]">{author}</span>
-                      <span
-                        className={`rounded-full px-1.5 text-[9.5px] font-bold ${
-                          fromClient ? "bg-[#dbeafe] text-[#1d4ed8]" : "bg-[#eef3ef] text-[#556977]"
-                        }`}
-                      >
-                        {fromClient ? "Client" : "Team"}
-                      </span>
-                      {entry.revision ? (
-                        <span className="rounded-full bg-[#fde8e8] px-1.5 text-[9.5px] font-bold text-[#b91c1c]">
-                          {entry.asks ? "Revision request" : "Revision"} {entry.revision}
-                        </span>
-                      ) : null}
-                      {/* Which piece of the group the message is about; another piece's opens it. */}
-                      {!grouped ? null : entry.piece._id === contentId ? (
-                        <span className="rounded-full bg-[#eef3ef] px-1.5 text-[9.5px] font-bold text-[#556977]">Piece {entry.at + 1} · this piece</span>
-                      ) : (
-                        <Link
-                          href={`/content/${entry.piece._id}`}
-                          title={entry.piece.title}
-                          className="max-w-44 truncate rounded-full bg-[#eef3ef] px-1.5 text-[9.5px] font-bold text-[#556977] no-underline hover:bg-[#dbeafe] hover:text-[#1d4ed8]"
-                        >
-                          Piece {entry.at + 1} · {entry.piece.title}
-                        </Link>
-                      )}
-                    </div>
-                    {entry.text ? (
-                      <div className="mt-0.5 text-[12px] leading-normal break-words whitespace-pre-line text-[#33434f]">{entry.text}</div>
-                    ) : null}
-                    {files.length ? <Attachments files={files} onOpen={(at) => setViewing({ files: files.map(toUpload), index: at })} /> : null}
+                    {entry.text}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-2 px-1 text-[10.5px] text-[#8496a3]">
-                    <span>{formatDateTime(entry.createdAt)}</span>
-                    {files.length ? (
-                      <span className="inline-flex items-center gap-0.5">
-                        <Paperclip size={10} strokeWidth={2} /> {files.length}
-                      </span>
-                    ) : null}
-                    {canComment ? (
-                      <button type="button" onClick={() => startReply(author)} className="cursor-pointer font-semibold text-[#2563eb] hover:underline">
-                        Reply
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
+                ) : null}
+                {files.length ? <Attachments files={files} end={fromTeam} onOpen={(at) => setViewing({ files: files.map(toUpload), index: at })} /> : null}
               </div>
             );
           })}
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-[#dbe3de] py-5 text-center">
-          <MessageSquare size={18} strokeWidth={1.75} className="text-[#b4c2bb]" />
-          <div className="text-[12px] font-semibold text-[#7a8e9b]">No messages yet</div>
-          {canComment ? <div className="text-[11px] text-[#9aacb8]">Start the conversation below.</div> : null}
+        <div className="flex h-60 flex-col items-center justify-center text-center">
+          {/* A chat bubble with its three dots rising in turn, as if a message is on its way. */}
+          <span aria-hidden="true" className="mb-3 flex h-9 w-14 items-center justify-center gap-1.5 rounded-2xl rounded-bl-sm border-[1.5px] border-[#cbd6d0]">
+            {[0, 180, 360].map((delay) => (
+              <span
+                key={delay}
+                className="h-1.5 w-1.5 animate-[typing-dot_1.3s_ease-in-out_infinite] rounded-full bg-[#9aacb8] motion-reduce:animate-none"
+                style={{ animationDelay: `${delay}ms` }}
+              />
+            ))}
+          </span>
+          <div className="text-[13px] font-bold text-[#0d1e2c]">No messages yet</div>
+          {canComment ? <div className="mt-1 text-[12px] text-[#7a8e9b]">Start the conversation with {clientName} below.</div> : null}
         </div>
       )}
 
       {canComment ? (
-        <div
-          {...dragProps}
-          className={`mt-3.5 rounded-lg border transition-colors ${
-            dragging ? "border-dashed border-[#2563eb] bg-[#eff6ff]" : "border-[#cbd6d0] bg-[#fafcfb] focus-within:border-[#2563eb] focus-within:bg-white"
-          }`}
-        >
+        <div {...dragProps} className="mt-3.5 border-t border-[#eef3ef] pt-3.5">
           {replyTo ? (
-            <div className="flex items-center justify-between gap-2 border-b border-[#eef3ef] px-2.5 py-1.5 text-[11px] text-[#556977]">
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-[#f4f7f5] px-2.5 py-1.5 text-[11px] text-[#556977]">
               <span className="truncate">
                 Replying to <b className="text-[#17242f]">{replyTo}</b>
               </span>
@@ -333,38 +321,15 @@ const CommentThread = ({
                 type="button"
                 aria-label="Cancel reply"
                 onClick={() => setReplyTo(null)}
-                className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-[#8496a3] hover:bg-[#eef3ef] hover:text-[#17242f]"
+                className="flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded text-[#8496a3] hover:bg-[#e3eae6] hover:text-[#17242f]"
               >
                 <X size={12} strokeWidth={2.5} />
               </button>
             </div>
           ) : null}
 
-          <textarea
-            ref={boxRef}
-            rows={3}
-            value={text}
-            readOnly={posting}
-            onChange={(event) => setText(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                send();
-              }
-            }}
-            onPaste={(event) => {
-              const files = Array.from(event.clipboardData.files);
-              if (files.length) {
-                event.preventDefault();
-                addFiles(files);
-              }
-            }}
-            placeholder={dragging ? "Drop files to attach them" : replyTo ? `Reply to ${replyTo}…` : `Write a message for ${clientName} or your team…`}
-            className="block w-full resize-none border-none bg-transparent px-2.75 pt-2.25 text-[12.5px] text-[#17242f] outline-none"
-          />
-
           {picked.length ? (
-            <div className="flex flex-wrap gap-1.5 px-2.5 pb-2">
+            <div className="mb-2.5 flex flex-wrap gap-1.5">
               {picked.map((entry) => {
                 const media = mediaOf(entry.file);
                 const Icon = MEDIA_ICON[media];
@@ -405,53 +370,80 @@ const CommentThread = ({
             </div>
           ) : null}
 
-
-          <div className="flex items-center justify-between gap-2 border-t border-[#eef3ef] px-2 py-1.5">
-            <label
-              title={`Attach images, videos or documents — up to ${MAX_ATTACHMENTS}`}
-              className={`inline-flex items-center gap-1 rounded-md px-2 py-1.25 text-[11.5px] font-semibold ${
-                picked.length >= MAX_ATTACHMENTS
-                  ? "cursor-not-allowed text-[#b4c2bb]"
-                  : "cursor-pointer text-[#556977] hover:bg-[#eef3ef] hover:text-[#17242f]"
+          <div className="flex items-end gap-2">
+            {/* One field: the words, with the attach button inside it. */}
+            <div
+              className={`flex min-w-0 flex-1 items-end rounded-xl border ${
+                dragging ? "border-dashed border-[#2563eb] bg-[#eff6ff]" : "border-[#dbe3de] bg-[#f4f7f5] focus-within:border-[#9aacb8] focus-within:bg-white"
               }`}
             >
-              <Paperclip size={13} strokeWidth={2} /> Attach
-              <span className="font-normal text-[#9aacb8]">
-                {picked.length ? `${picked.length}/${MAX_ATTACHMENTS}` : "image, video, doc"}
-              </span>
-              <input
-                type="file"
-                accept={ACCEPT}
-                multiple
-                disabled={picked.length >= MAX_ATTACHMENTS || posting}
-                className="hidden"
+              <label
+                title={`Attach images, videos or documents — up to ${MAX_ATTACHMENTS}`}
+                className={`mb-1.5 ml-1.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${
+                  picked.length >= MAX_ATTACHMENTS || posting
+                    ? "cursor-not-allowed text-[#b4c2bb]"
+                    : "cursor-pointer text-[#556977] hover:bg-[#e3eae6] hover:text-[#17242f]"
+                }`}
+              >
+                <Paperclip size={14} strokeWidth={2} />
+                <input
+                  type="file"
+                  accept={ACCEPT}
+                  multiple
+                  disabled={picked.length >= MAX_ATTACHMENTS || posting}
+                  className="hidden"
+                  onChange={(event) => {
+                    addFiles(Array.from(event.target.files ?? []));
+                    // Let the same file be picked again after removing it.
+                    event.target.value = "";
+                  }}
+                />
+              </label>
+              <textarea
+                ref={boxRef}
+                rows={1}
+                maxLength={1000}
+                value={text}
+                readOnly={posting}
+                aria-label={replyTo ? `Reply to ${replyTo}` : "Message"}
                 onChange={(event) => {
-                  addFiles(Array.from(event.target.files ?? []));
-                  event.target.value = "";
+                  setText(event.target.value);
+                  // Grows with what is typed, up to a few lines.
+                  event.target.style.height = "auto";
+                  event.target.style.height = `${Math.min(event.target.scrollHeight, 112)}px`;
                 }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    send();
+                  }
+                }}
+                onPaste={(event) => {
+                  const files = Array.from(event.clipboardData.files);
+                  if (files.length) {
+                    event.preventDefault();
+                    addFiles(files);
+                  }
+                }}
+                placeholder={dragging ? "Drop files to attach them" : replyTo ? `Reply to ${replyTo}…` : "Type a message"}
+                className="block min-h-10 min-w-0 flex-1 resize-none border-none bg-transparent py-2.5 pr-3.5 pl-2 text-[12.5px] leading-normal whitespace-pre-wrap text-[#17242f] outline-none wrap-anywhere placeholder:text-[#9aacb8]"
               />
-            </label>
+            </div>
             <button
               type="button"
               onClick={send}
               disabled={(!text.trim() && !picked.length) || posting}
+              aria-label={replyTo ? "Send reply" : "Send message"}
               aria-busy={posting}
-              className={`inline-flex shrink-0 items-center gap-1.5 rounded-md bg-[#0b1522] px-3 py-1.5 text-[12px] font-semibold text-white ${
-                posting ? "cursor-wait" : "cursor-pointer hover:bg-[#17263a] disabled:cursor-not-allowed disabled:opacity-40"
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#16a34a] text-white ${
+                posting ? "cursor-wait" : "cursor-pointer hover:bg-[#15803d] disabled:cursor-not-allowed disabled:opacity-40"
               }`}
             >
-              {posting ? (
-                <>
-                  <Loader2 size={12} strokeWidth={2.5} className="animate-spin" />
-                  {picked.length && (progress ?? 0) < 100 ? `Uploading ${progress ?? 0}%` : "Sending…"}
-                </>
-              ) : (
-                <>
-                  <Send size={12} strokeWidth={2.25} /> {replyTo ? "Reply" : "Send"}
-                </>
-              )}
+              {posting ? <Loader2 size={16} strokeWidth={2.25} className="animate-spin" /> : <Send size={16} strokeWidth={2} />}
             </button>
           </div>
+
+          {posting && picked.length && (progress ?? 0) < 100 ? <div className="mt-2 px-1 text-[11px] text-[#7a8e9b]">Uploading {progress}%…</div> : null}
         </div>
       ) : null}
 

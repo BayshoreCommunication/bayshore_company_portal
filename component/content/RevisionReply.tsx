@@ -6,7 +6,8 @@ import { Loader2, MessageSquareText, Play, Plus, RotateCcw, SendHorizontal, Tag,
 import { changeContentStatusAction, type ContentFile, type ContentItem, type ContentRevision } from "@/app/actions/content";
 import { btnDraft, btnPrimary } from "@/component/shared/ui";
 import { postComment } from "./CommentThread";
-import { MEDIA_ICON } from "./contentForm";
+import { MEDIA_ICON, ThumbnailField, toThumbnail, type Upload } from "./contentForm";
+import { extendPiece, sliceFiles } from "./upload";
 import { CONTENT_KINDS, filesOf, mediaOf, uploadHint, uploadProblem } from "./contentUi";
 
 // The backend's limits (models/content.model.ts, validators/content.validator.ts).
@@ -107,6 +108,10 @@ const RevisionReply = ({
   // files are the revised version — and kept otherwise.
   const [choice, setChoice] = useState<Record<string, "keep" | "replace">>({});
   const [added, setAdded] = useState<Picked[]>([]);
+  // The video's cover: the stored one, a new one picked here, or none.
+  const stored = item.videoThumbnail;
+  const storedThumbnail: Upload | null = stored ? { name: stored.name, size: stored.size, url: stored.url, media: "image", mime: stored.mimeType } : null;
+  const [thumbnail, setThumbnail] = useState<Upload | null>(storedThumbnail);
   const [link, setLink] = useState(item.link ?? "");
   const [caption, setCaption] = useState(item.caption ?? "");
   const [tags, setTags] = useState<string[]>(item.tags);
@@ -123,6 +128,7 @@ const RevisionReply = ({
     added.forEach((file) => URL.revokeObjectURL(file.url));
     setChoice({});
     setAdded([]);
+    setThumbnail(storedThumbnail);
     setLink(item.link ?? "");
     setCaption(item.caption ?? "");
     setTags(item.tags);
@@ -143,7 +149,6 @@ const RevisionReply = ({
   // Replaced files leave the post, and stay with the piece as its previous version.
   const removed = current.filter(replacing).map((file) => file.url);
   const count = kept.length + added.length;
-  const room = spec.maxFiles - count;
 
   const addFiles = (files: File[]) => {
     const wrong = files.filter((file) => !spec.media.includes(mediaOf(file)));
@@ -152,9 +157,21 @@ const RevisionReply = ({
     const allowed = usable.filter((file) => !uploadProblem(file));
     if (wrong.length) toast.error(`${spec.label} takes ${spec.media.join(" or ")} files only — ${wrong.length} skipped.`);
     if (problems.length) toast.error(`${problems.join("; ")} — skipped.`);
-    if (allowed.length > room) toast.error(`${spec.label} takes up to ${spec.maxFiles} files — only the first ${Math.max(0, room)} were added.`);
-    const picked = allowed.slice(0, Math.max(0, room)).map((file) => ({ id: `${file.name}-${file.size}-${Math.random()}`, file, url: URL.createObjectURL(file) }));
+    const picked = allowed.map((file) => ({ id: `${file.name}-${file.size}-${Math.random()}`, file, url: URL.createObjectURL(file) }));
     if (picked.length) setAdded((list) => [...list, ...picked]);
+  };
+
+  // A new cover for the video. Its preview URL is freed with the page.
+  const thumbnailUrls = useRef<string[]>([]);
+  useEffect(() => {
+    const urls = thumbnailUrls.current;
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
+  const pickThumbnail = (file: File) => {
+    const picked = toThumbnail(file);
+    if ("problem" in picked) return void toast.error(picked.problem);
+    thumbnailUrls.current.push(picked.upload.url);
+    setThumbnail(picked.upload);
   };
 
   const unpick = (id: string) =>
@@ -196,8 +213,10 @@ const RevisionReply = ({
   // What has been changed on the piece itself, in words — for the save, and for the note
   // that goes to the client when nothing was typed.
   const pendingTags = entry.trim() && !tags.includes(entry.trim()) ? [...tags, entry.trim()] : tags;
+  const thumbnailChanged = (thumbnail?.url ?? "") !== (storedThumbnail?.url ?? "");
   const changes = [
     removed.length || added.length ? "files" : null,
+    thumbnailChanged ? "thumbnail" : null,
     allowLink && link.trim() !== (item.link ?? "") ? "link" : null,
     caption.trim() !== (item.caption ?? "") ? spec.captionLabel.toLowerCase() : null,
     pendingTags.join("\n") !== item.tags.join("\n") ? "tags" : null,
@@ -229,12 +248,30 @@ const RevisionReply = ({
         if (removed.length) form.set("removeFiles", JSON.stringify(removed));
         // New files replace whatever the piece has, unless it is named here.
         form.set("keepFiles", JSON.stringify(kept.map((file) => file.url)));
-        for (const file of added) form.append("files", file.file, file.file.name);
-        if (added.length) setProgress(0);
-        const { status, body } = await savePiece(item._id, form, setProgress);
-        setProgress(null);
+        // A long list of new files goes up in turns: the first lot with the changes, the rest after.
+        const [head = [], ...rest] = sliceFiles(added.map(({ file }) => ({ file, name: file.name, size: file.size })));
+        for (const upload of head) form.append("files", upload.file, upload.name);
+        if (thumbnail?.file) form.append("thumbnail", thumbnail.file, thumbnail.name);
+        else if (thumbnailChanged) form.set("removeThumbnail", "true");
+        const headBytes = head.reduce((sum, upload) => sum + upload.size, 0) + (thumbnail?.file?.size ?? 0);
+        const totalBytes = Math.max(1, headBytes + rest.flat().reduce((sum, upload) => sum + upload.size, 0));
+        let sentBytes = 0;
+        const showProgress = (bytes: number, percent: number) => setProgress(Math.round(((sentBytes + (bytes * percent) / 100) / totalBytes) * 100));
+        if (added.length || thumbnail?.file) setProgress(0);
+        const { status, body } = await savePiece(item._id, form, (percent) => showProgress(headBytes, percent));
         if (status < 200 || status >= 300) {
+          setProgress(null);
           toast.error([body.message, ...(body.errors ?? [])].filter(Boolean).join(" — ") || "Couldn't save the changes.");
+          return;
+        }
+        sentBytes = headBytes;
+        const failed = await extendPiece(item._id, rest, showProgress, (bytes) => {
+          sentBytes += bytes;
+        });
+        setProgress(null);
+        if (failed) {
+          toast.error(`The piece was saved, but ${failed.left.flat().length} of the new files didn't upload: ${failed.problem} Add them again.`);
+          onDone();
           return;
         }
       }
@@ -363,7 +400,7 @@ const RevisionReply = ({
                 <span>
                   {spec.label} files{" "}
                   <span className="font-medium text-[#7a8e9b]">
-                    ({count} of {spec.maxFiles})
+                    ({count})
                   </span>
                 </span>
                 <span className="text-[10.5px] font-medium text-[#7a8e9b]">{uploadHint(item.type)}</span>
@@ -416,7 +453,7 @@ const RevisionReply = ({
               <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                 {spec.media.map((media) => {
                   const Icon = MEDIA_ICON[media];
-                  const off = room <= 0 || busy;
+                  const off = busy;
                   return (
                     <label
                       key={media}
@@ -450,6 +487,12 @@ const RevisionReply = ({
                 </p>
               ) : null}
             </div>
+
+            {spec.media.includes("video") ? (
+              <div className="mt-4">
+                <ThumbnailField thumbnail={thumbnail} onPick={pickThumbnail} onRemove={() => setThumbnail(null)} disabled={busy} />
+              </div>
+            ) : null}
 
             {allowLink ? (
               <div className="mt-4">

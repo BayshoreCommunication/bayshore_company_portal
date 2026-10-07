@@ -58,3 +58,18 @@
     }
   }
 }
+
+/* One dot of a "typing…" bubble: it lifts and brightens, then settles. The three
+   dots run it a beat apart, so they rise one after another. */
+@keyframes typing-dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.3;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}

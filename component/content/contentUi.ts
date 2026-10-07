@@ -33,17 +33,19 @@ export type Media = ContentMedia;
 // Fields some kinds need on top of title + upload + caption.
 export type KindField = "pageName" | "pageUrl" | "subject" | "headline" | "cta";
 
-// Any piece can carry several files — a post with a few photos, a set of short videos…
-export const MAX_FILES = 10;
-
-// The backend's per-file caps and the most files one save can carry. Checked here
-// first so a too-big file is caught before it's uploaded.
+// The backend's per-file caps. Checked here first so a too-big file is caught before it's
+// uploaded.
 export const MEDIA_MAX_BYTES: Record<Media, number> = {
   image: 10 * 1024 * 1024,
   video: 200 * 1024 * 1024,
   doc: 20 * 1024 * 1024,
 };
-export const MAX_FILES_PER_SAVE = 40;
+// The most one request to the backend can carry (validators/content.validator.ts,
+// middleware/upload.ts) — and, in bytes, the most it is asked to hold at once. Any number of
+// pieces can be saved together: a longer list simply goes up over several requests.
+export const MAX_PIECES_PER_REQUEST = 10;
+export const MAX_FILES_PER_REQUEST = 40;
+export const MAX_BYTES_PER_REQUEST = 500 * 1024 * 1024;
 
 // The exact file types the backend stores (models/content.model.ts) — the file
 // picker's "image/*" would otherwise let through HEIC, SVG and the like.
@@ -79,7 +81,6 @@ export type KindSpec = {
   // What can be uploaded, how many, and whether a pasted link can stand in for the files.
   media: Media[];
   minFiles: number;
-  maxFiles: number;
   linkPlaceholder?: string;
   captionLabel: string;
   captionPlaceholder: string;
@@ -95,7 +96,6 @@ export const CONTENT_KINDS: Record<ContentKind, KindSpec> = {
     background: "#dbeafe",
     media: ["image"],
     minFiles: 1,
-    maxFiles: MAX_FILES,
     captionLabel: "Caption",
     captionPlaceholder: "Write the post caption...",
     fields: [],
@@ -108,7 +108,6 @@ export const CONTENT_KINDS: Record<ContentKind, KindSpec> = {
     background: "#cffafe",
     media: ["image"],
     minFiles: 2,
-    maxFiles: MAX_FILES,
     captionLabel: "Caption",
     captionPlaceholder: "Write the post caption...",
     fields: [],
@@ -121,7 +120,6 @@ export const CONTENT_KINDS: Record<ContentKind, KindSpec> = {
     background: "#fce7f3",
     media: ["image", "video"],
     minFiles: 1,
-    maxFiles: MAX_FILES,
     captionLabel: "On-screen text",
     captionPlaceholder: "Any text, sticker or link to add to the story...",
     fields: [],
@@ -134,7 +132,6 @@ export const CONTENT_KINDS: Record<ContentKind, KindSpec> = {
     background: "#fbdada",
     media: ["video"],
     minFiles: 1,
-    maxFiles: MAX_FILES,
     linkPlaceholder: "…or paste a video link (YouTube, Google Drive)",
     captionLabel: "Caption",
     captionPlaceholder: "Write the video caption...",
@@ -148,7 +145,6 @@ export const CONTENT_KINDS: Record<ContentKind, KindSpec> = {
     background: "#fdf1de",
     media: ["doc"],
     minFiles: 1,
-    maxFiles: MAX_FILES,
     linkPlaceholder: "…or paste the Google Doc link",
     captionLabel: "Summary",
     captionPlaceholder: "A line or two about what the article covers...",
@@ -162,7 +158,6 @@ export const CONTENT_KINDS: Record<ContentKind, KindSpec> = {
     background: "#dcf3e2",
     media: ["doc"],
     minFiles: 1,
-    maxFiles: MAX_FILES,
     linkPlaceholder: "…or paste the Google Doc link",
     captionLabel: "What changed",
     captionPlaceholder: "New page, updated sections, anything the client should check...",
@@ -176,7 +171,6 @@ export const CONTENT_KINDS: Record<ContentKind, KindSpec> = {
     background: "#ede9fe",
     media: ["doc", "image"],
     minFiles: 1,
-    maxFiles: MAX_FILES,
     linkPlaceholder: "…or paste a Google Doc or Mailchimp preview link",
     captionLabel: "Preview text",
     captionPlaceholder: "The short line shown after the subject in the inbox...",
@@ -190,7 +184,6 @@ export const CONTENT_KINDS: Record<ContentKind, KindSpec> = {
     background: "#ffedd5",
     media: ["image"],
     minFiles: 1,
-    maxFiles: MAX_FILES,
     captionLabel: "Post text",
     captionPlaceholder: "What's new — an offer, event or update...",
     fields: ["cta"],
@@ -203,7 +196,6 @@ export const CONTENT_KINDS: Record<ContentKind, KindSpec> = {
     background: "#e2e8f0",
     media: ["image", "video"],
     minFiles: 1,
-    maxFiles: MAX_FILES,
     captionLabel: "Ad copy",
     captionPlaceholder: "The main text of the ad...",
     fields: ["headline", "cta"],
@@ -232,8 +224,9 @@ export const acceptFor = (kind: ContentKind) => CONTENT_KINDS[kind].media.map((m
 
 export const uploadHint = (kind: ContentKind) => {
   const spec = CONTENT_KINDS[kind];
-  const count = spec.minFiles > 1 ? `${spec.minFiles}–${spec.maxFiles} files` : `Up to ${spec.maxFiles} files`;
-  return `${spec.media.map((media) => MEDIA_HINT[media]).join(" or ")} · ${count}`;
+  // A piece takes any number of files; only a minimum is worth saying.
+  const types = spec.media.map((media) => MEDIA_HINT[media]).join(" or ");
+  return spec.minFiles > 1 ? `${types} · At least ${spec.minFiles} files` : types;
 };
 
 // "images", "images or videos", "documents"

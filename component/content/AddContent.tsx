@@ -42,22 +42,28 @@ import {
   sectionCard,
   textareaBase,
 } from "@/component/shared/ui";
+import { extendPiece, sliceFiles } from "./upload";
 import {
   BATCH_OPTIONS,
   type Batch,
   type Draft,
   KIND_OPTIONS,
+  ThumbnailField,
   type Upload,
   UploadBox,
   blankDraft,
   monthOptions,
+  takesThumbnail,
+  toThumbnail,
   weekLabel,
   weekOptions,
 } from "./contentForm";
 import {
   CONTENT_KINDS,
   CTA_OPTIONS,
-  MAX_FILES_PER_SAVE,
+  MAX_BYTES_PER_REQUEST,
+  MAX_FILES_PER_REQUEST,
+  MAX_PIECES_PER_REQUEST,
   STATUS_BADGES,
   filesOf,
   formatDateTime,
@@ -295,8 +301,9 @@ const BatchItemCard = ({
 
 // ── One piece in the form ────────────────────────────────────────────────────
 
-// A piece being written. Several can be filled in at once and added together.
-type Block = { id: string; type: ContentKind; draft: Draft; error: string | null };
+// A piece being written. Several can be filled in at once and added together. `pieceId` is
+// set when a save stopped part-way: the piece is stored, and only its files left to send.
+type Block = { id: string; type: ContentKind; draft: Draft; error: string | null; pieceId?: string };
 
 const newBlock = (type: ContentKind = "image"): Block => ({
   id: `block-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
@@ -306,11 +313,11 @@ const newBlock = (type: ContentKind = "image"): Block => ({
 });
 
 // What's still missing before this piece can be added — or null when it's ready.
-const problemWith = ({ type, draft }: Block) => {
+const problemWith = ({ type, draft, pieceId }: Block) => {
   const spec = CONTENT_KINDS[type];
   if (!draft.title.trim()) return "Give this piece a title.";
   const hasLink = Boolean(spec.linkPlaceholder && draft.link.trim());
-  if (draft.files.length < spec.minFiles && !hasLink) {
+  if (!pieceId && draft.files.length < spec.minFiles && !hasLink) {
     return spec.minFiles > 1
       ? `A ${spec.label.toLowerCase()} needs at least ${spec.minFiles} images.`
       : `Upload the ${uploadNoun(type)}${spec.linkPlaceholder ? " or paste a link" : ""}.`;
@@ -377,11 +384,9 @@ const ContentBlock = ({
   const pickFiles = (picked: File[]) => {
     const uploads = toUploads(picked);
     if (!uploads.length) return;
-    const room = spec.maxFiles - draft.files.length;
-    if (uploads.length > room) setError(`Up to ${spec.maxFiles} files per piece — only the first ${Math.max(0, room)} were added.`);
     setDraft((current) => ({
       ...current,
-      files: [...current.files, ...uploads].slice(0, spec.maxFiles),
+      files: [...current.files, ...uploads],
       title: current.title || uploads[0].name.replace(/\.[^.]+$/, ""),
     }));
   };
@@ -391,7 +396,14 @@ const ContentBlock = ({
     if (upload) setDraft((current) => ({ ...current, files: current.files.map((old, i) => (i === index ? upload : old)) }));
   };
 
-  const changeType = (next: ContentKind) => onChange((current) => ({ ...current, type: next, draft: blankDraft(), error: null }));
+  const pickThumbnail = (file: File) => {
+    const picked = toThumbnail(file);
+    if ("problem" in picked) return setError(picked.problem);
+    onPreviewUrl(picked.upload.url);
+    patch({ thumbnail: picked.upload });
+  };
+
+  const changeType = (next: ContentKind) => onChange((current) => ({ ...current, type: next, draft: blankDraft(), error: null, pieceId: undefined }));
 
   const body = (
     <div className="flex flex-col gap-4">
@@ -424,6 +436,8 @@ const ContentBlock = ({
         onReplace={replaceFile}
         onRemove={(index) => patch({ files: draft.files.filter((_, i) => i !== index) })}
       />
+
+      {takesThumbnail(type) ? <ThumbnailField thumbnail={draft.thumbnail} onPick={pickThumbnail} onRemove={() => patch({ thumbnail: null })} /> : null}
 
       {spec.linkPlaceholder && !draft.files.length ? (
         <div className="relative">
@@ -612,6 +626,19 @@ const toBatchItem = (item: ContentItem): BatchItem => ({
   weekStart: item.weekStart,
 });
 
+// Every piece of a batch, however many there are — the list comes a page at a time.
+const loadBatch = async (params: { client: string; batchMonth: string; batchType: Batch }) => {
+  const first = await listContentAction({ ...params, limit: 100 });
+  if (!first.ok || !first.data) return first;
+  const items = [...first.data.items];
+  for (let page = 2; page <= first.data.pagination.totalPages; page += 1) {
+    const next = await listContentAction({ ...params, page, limit: 100 });
+    if (!next.ok || !next.data) return next;
+    items.push(...next.data.items);
+  }
+  return { ...first, data: { ...first.data, items } };
+};
+
 // Sends the form to the upload route, reporting progress (0–100) as the files go up.
 // XMLHttpRequest rather than fetch, because fetch can't report upload progress.
 const uploadBatch = (form: FormData, onProgress: (percent: number) => void) =>
@@ -630,6 +657,44 @@ const uploadBatch = (form: FormData, onProgress: (percent: number) => void) =>
     request.onerror = () => reject(new Error("Network error"));
     request.send(form);
   });
+
+// A piece as it goes up: its first lot of files with the piece itself (`head`), and the rest
+// after it, lot by lot. One already stored (a save that stopped part-way) has only files left.
+type Part = { block: Block; head: Upload[]; rest: Upload[][] };
+
+const partOf = (block: Block): Part => {
+  const lots = sliceFiles(block.draft.files);
+  return block.pieceId ? { block, head: [], rest: lots } : { block, head: lots[0] ?? [], rest: lots.slice(1) };
+};
+
+const sizeOf = (uploads: Upload[]) => uploads.reduce((sum, upload) => sum + upload.size, 0);
+// What a piece adds to an upload: in all, and with its first request.
+const bytesOf = ({ draft }: Block) => sizeOf(draft.files) + (draft.thumbnail?.size ?? 0);
+const headBytes = ({ block, head }: Part) => sizeOf(head) + (block.draft.thumbnail?.size ?? 0);
+
+// The pieces, split into requests the backend will take: so many pieces, files and bytes in
+// each. However long the list, it is saved together — it just goes up in turns.
+const roundsOf = (parts: Part[]) => {
+  const rounds: Part[][] = [];
+  let files = 0;
+  let bytes = 0;
+  for (const part of parts) {
+    const round = rounds[rounds.length - 1];
+    const full =
+      !round ||
+      round.length >= MAX_PIECES_PER_REQUEST ||
+      files + part.head.length > MAX_FILES_PER_REQUEST ||
+      bytes + headBytes(part) > MAX_BYTES_PER_REQUEST;
+    if (full) {
+      rounds.push([part]);
+      files = 0;
+      bytes = 0;
+    } else round.push(part);
+    files += part.head.length;
+    bytes += headBytes(part);
+  }
+  return rounds;
+};
 
 // "Piece 2: Headline is required…" → piece index 1, and the message.
 const pieceProblem = (message: string) => {
@@ -685,7 +750,7 @@ const AddContent = ({
   useEffect(() => {
     if (!client) return;
     let current = true;
-    listContentAction({ client: client._id, batchMonth: month, batchType: batch, limit: 100 }).then((result) => {
+    loadBatch({ client: client._id, batchMonth: month, batchType: batch }).then((result) => {
       if (!current) return;
       setLoaded(
         result.ok && result.data
@@ -759,7 +824,11 @@ const AddContent = ({
   const clearAll = () => {
     setBlocks([newBlock()]);
     setError(null);
+    unfinished.current = null;
   };
+
+  // A save that stopped part-way: the group its saved pieces went into, for the rest to join.
+  const unfinished = useRef<{ key: string; group: string } | null>(null);
 
   // Save every piece in the form at once — as drafts, or sent straight to the client —
   // or point at what's missing. Files go up through the upload route with progress.
@@ -776,68 +845,160 @@ const AddContent = ({
       return;
     }
 
-    const fileCount = blocks.reduce((sum, block) => sum + block.draft.files.length, 0);
-    if (fileCount > MAX_FILES_PER_SAVE) {
-      return setError(
-        `That's ${fileCount} files — save at most ${MAX_FILES_PER_SAVE} at a time. Save some pieces first, then add the rest.`,
-      );
-    }
+    // A long list goes up over several requests, each within what the backend takes at once:
+    // the pieces a few at a time, and a piece with many files lot by lot. They are still saved
+    // as one group, and the client hears about them once, at the end.
+    const parts = blocks.map(partOf);
+    const rounds = roundsOf(parts.filter((part) => !part.block.pieceId));
+    const totalBytes = Math.max(1, blocks.reduce((sum, block) => sum + bytesOf(block), 0));
+    const groupKey = `${client._id}|${month}|${batch}`;
+    let group = unfinished.current?.key === groupKey ? unfinished.current.group : undefined;
+    const inTurns = rounds.length > 1 || parts.some((part) => part.rest.length > 0) || Boolean(group);
+    // Pieces saved in full, and pieces stored with files still to send.
+    const saved = new Set<string>();
+    const partial = new Map<string, { pieceId: string; left: Upload[] }>();
+    for (const part of parts) if (part.block.pieceId) partial.set(part.block.id, { pieceId: part.block.pieceId, left: part.rest.flat() });
+    let sentBytes = 0;
+    const showProgress = (bytes: number, percent: number) => setUploadProgress(Math.round(((sentBytes + (bytes * percent) / 100) / totalBytes) * 100));
 
-    const form = new FormData();
-    form.set("client", client._id);
-    form.set("batchMonth", month);
-    form.set("batchType", batch);
-    form.set("status", status);
-    if (batch === "weekly") form.set("weekStart", weekStart);
-    if (batch === "event") {
-      form.set("eventName", eventName.trim());
-      form.set("eventDate", eventDate);
-    }
-    if (batch === "individual") form.set("sentReason", reason.trim());
-    form.set(
-      "pieces",
-      JSON.stringify(
-        blocks.map(({ type, draft }) => ({
-          type,
-          title: draft.title.trim(),
-          caption: draft.caption.trim() || undefined,
-          link: draft.link.trim() || undefined,
-          pageName: draft.pageName.trim() || undefined,
-          pageUrl: draft.pageUrl.trim() || undefined,
-          subject: draft.subject.trim() || undefined,
-          headline: draft.headline.trim() || undefined,
-          cta: draft.cta || undefined,
-        })),
-      ),
-    );
-    blocks.forEach((block, index) => {
-      for (const upload of block.draft.files) if (upload.file) form.append(`files[${index}]`, upload.file, upload.name);
-    });
+    // What every request says about the batch.
+    const batchForm = () => {
+      const form = new FormData();
+      form.set("client", client._id);
+      form.set("batchMonth", month);
+      form.set("batchType", batch);
+      form.set("status", status);
+      if (batch === "weekly") form.set("weekStart", weekStart);
+      if (batch === "event") {
+        form.set("eventName", eventName.trim());
+        form.set("eventDate", eventDate);
+      }
+      if (batch === "individual") form.set("sentReason", reason.trim());
+      if (group) form.set("group", group);
+      return form;
+    };
+
+    // Stops part-way: what was saved leaves the form, what wasn't stays, with what went wrong.
+    // A piece stored without all its files stays too, holding the files still to send.
+    const stop = (message: string, perBlock = new Map<string, string[]>()) => {
+      const some = saved.size > 0 || partial.size > 0;
+      // The pieces still in the form join the same group when they are saved.
+      if (some && group) unfinished.current = { key: groupKey, group };
+      setBlocks((current) =>
+        current
+          .filter((block) => !saved.has(block.id))
+          .map((block) => {
+            const half = partial.get(block.id);
+            const error = perBlock.get(block.id)?.join(" ") ?? null;
+            return half
+              ? {
+                  ...block,
+                  pieceId: half.pieceId,
+                  draft: { ...block.draft, files: half.left, thumbnail: null },
+                  error: error ?? "This piece is saved, but these files are still to upload — save again to send them.",
+                }
+              : { ...block, error };
+          }),
+      );
+      setError(some ? `${saved.size} of ${blocks.length} pieces were saved in full; the rest weren't. ${message}` : message);
+      if (some) reload();
+    };
+
+    // The rest of a stored piece's files. Returns what went wrong, if anything.
+    const sendRest = async (part: Part, pieceId: string) => {
+      const failed = await extendPiece(pieceId, part.rest, showProgress, (bytes) => {
+        sentBytes += bytes;
+      });
+      if (failed) {
+        partial.set(part.block.id, { pieceId, left: failed.left.flat() });
+        return failed.problem;
+      }
+      partial.delete(part.block.id);
+      saved.add(part.block.id);
+      return null;
+    };
 
     setSavingAs(status);
     setUploadProgress(0);
     try {
-      const { status: code, body } = await uploadBatch(form, setUploadProgress);
-      if (code >= 200 && code < 300) {
-        toast.success(body.message);
-        setBlocks([newBlock(blocks[blocks.length - 1].type)]);
-        reload();
-        return;
+      // Pieces an earlier save left half-way come first.
+      for (const part of parts) {
+        if (!part.block.pieceId) continue;
+        const problem = await sendRest(part, part.block.pieceId);
+        if (problem) return stop(problem);
       }
-      // "Piece 2: …" problems go on that piece's card; anything else goes under the form.
-      const perPiece = new Map<number, string[]>();
-      const general: string[] = [];
-      for (const message of body.errors ?? []) {
-        const problem = pieceProblem(message);
-        if (problem && problem.index < blocks.length)
-          perPiece.set(problem.index, [...(perPiece.get(problem.index) ?? []), problem.message]);
-        else general.push(message);
+
+      for (const round of rounds) {
+        const form = batchForm();
+        if (inTurns) form.set("more", "true");
+        form.set(
+          "pieces",
+          JSON.stringify(
+            round.map(({ block: { type, draft } }) => ({
+              type,
+              title: draft.title.trim(),
+              caption: draft.caption.trim() || undefined,
+              link: draft.link.trim() || undefined,
+              pageName: draft.pageName.trim() || undefined,
+              pageUrl: draft.pageUrl.trim() || undefined,
+              subject: draft.subject.trim() || undefined,
+              headline: draft.headline.trim() || undefined,
+              cta: draft.cta || undefined,
+            })),
+          ),
+        );
+        round.forEach(({ block, head }, index) => {
+          for (const upload of head) if (upload.file) form.append(`files[${index}]`, upload.file, upload.name);
+          const thumbnail = block.draft.thumbnail;
+          if (thumbnail?.file) form.append(`thumbnails[${index}]`, thumbnail.file, thumbnail.name);
+        });
+
+        const roundBytes = round.reduce((sum, part) => sum + headBytes(part), 0);
+        const { status: code, body } = await uploadBatch(form, (percent) => showProgress(roundBytes, percent));
+        if (code < 200 || code >= 300) {
+          // "Piece 2: …" problems go on that piece's card; anything else goes under the form.
+          const perBlock = new Map<string, string[]>();
+          const general: string[] = [];
+          for (const message of body.errors ?? []) {
+            const problem = pieceProblem(message);
+            const block = problem ? round[problem.index]?.block : undefined;
+            if (problem && block) perBlock.set(block.id, [...(perBlock.get(block.id) ?? []), problem.message]);
+            else general.push(message);
+          }
+          return stop([body.message, ...general].filter(Boolean).join(" — "), perBlock);
+        }
+        sentBytes += roundBytes;
+        const stored = body.data?.items ?? [];
+        group = group ?? stored[0]?.group;
+        // Note where every piece of the round stands before sending any more of it.
+        round.forEach((part, index) => {
+          if (!part.rest.length) saved.add(part.block.id);
+          else if (stored[index]) partial.set(part.block.id, { pieceId: stored[index]._id, left: part.rest.flat() });
+        });
+        for (const [index, part] of round.entries()) {
+          if (!part.rest.length) continue;
+          if (!stored[index]) return stop("The server didn't say which pieces it saved — check the batch on the right before saving again.");
+          const problem = await sendRest(part, stored[index]._id);
+          if (problem) return stop(problem);
+        }
+        if (!inTurns) toast.success(body.message);
       }
-      if (perPiece.size)
-        setBlocks((current) => current.map((block, index) => ({ ...block, error: perPiece.get(index)?.join(" ") ?? null })));
-      setError([body.message, ...general].filter(Boolean).join(" — "));
+
+      if (inTurns) {
+        // Everything is in: now the client can be told, once.
+        if (status === "pending_approval" && group) {
+          const form = batchForm();
+          form.set("pieces", "[]");
+          const { status: code, body } = await uploadBatch(form, () => undefined);
+          if (code < 200 || code >= 300) toast.error(`Everything was saved, but ${client.companyName} couldn't be notified: ${body.message}`);
+        }
+        toast.success(`${blocks.length} ${blocks.length === 1 ? "piece" : "pieces"} ${status === "draft" ? "saved as drafts" : "sent for approval"}`);
+      }
+      unfinished.current = null;
+      setBlocks([newBlock(blocks[blocks.length - 1].type)]);
+      reload();
     } catch {
-      setError("Couldn't reach the server. Check your connection and try again — nothing was saved.");
+      stop(`Couldn't reach the server. Check your connection and try again${saved.size || partial.size ? "." : " — nothing was saved."}`);
     } finally {
       setUploadProgress(null);
     }
@@ -892,7 +1053,7 @@ const AddContent = ({
   };
 
   // What the pressed save button says while it works.
-  const hasFiles = blocks.some((block) => block.draft.files.some((file) => file.file));
+  const hasFiles = blocks.some((block) => bytesOf(block) > 0);
   const savingLabel = hasFiles && (uploadProgress ?? 0) < 100 ? `Uploading ${uploadProgress ?? 0}%` : "Saving…";
 
   const stepLabel = "mb-3 flex items-center gap-2 text-[11px] font-bold tracking-[0.5px] text-[#7a8d9b] uppercase";

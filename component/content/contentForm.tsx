@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { type PickerOption } from "@/component/shared/Picker";
 import { btnDraft } from "@/component/shared/ui";
-import { CONTENT_KINDS, KIND_ORDER, acceptFor, uploadHint, uploadNoun, type ContentKind, type Media } from "./contentUi";
+import { CONTENT_KINDS, KIND_ORDER, MEDIA_MAX_BYTES, acceptFor, mediaOf, uploadHint, uploadNoun, uploadProblem, type ContentKind, type Media } from "./contentUi";
 
 // The pieces of a content form shared by Add Content and Edit Content: the batch
 // choices, a piece's fields, and the upload box with its previews.
@@ -99,6 +99,8 @@ export type Draft = {
   caption: string;
   link: string;
   files: Upload[];
+  // The cover image for the piece's video — for the kinds that take video.
+  thumbnail: Upload | null;
   // Only some kinds use these — see `fields` in CONTENT_KINDS (contentUi).
   pageName: string;
   pageUrl: string;
@@ -113,6 +115,7 @@ export const blankDraft = (): Draft => ({
   caption: "",
   link: "",
   files: [],
+  thumbnail: null,
   pageName: "",
   pageUrl: "",
   subject: "",
@@ -166,6 +169,80 @@ export const FilePreview = ({ file }: { file: Upload }) => {
     </div>
   );
 };
+
+// ── A video's thumbnail ──────────────────────────────────────────────────────
+
+// Whether a kind's pieces can carry a video thumbnail: the kinds that take video.
+export const takesThumbnail = (kind: ContentKind) => CONTENT_KINDS[kind].media.includes("video");
+
+// A picked file as a thumbnail to upload — or why it can't be one.
+export const toThumbnail = (file: File): { upload: Upload } | { problem: string } => {
+  const problem = mediaOf(file) === "image" ? uploadProblem(file) : "A thumbnail has to be an image — JPG, PNG or WebP.";
+  if (problem) return { problem };
+  return { upload: { name: file.name, size: file.size, url: URL.createObjectURL(file), media: "image", mime: file.type, file } };
+};
+
+// The cover image for a piece's video, wherever a video can be uploaded: what shows before the
+// video plays, and in lists. Optional — without one, players show the video's first frame.
+export const ThumbnailField = ({
+  thumbnail,
+  onPick,
+  onRemove,
+  disabled = false,
+}: {
+  thumbnail: Upload | null;
+  onPick: (file: File) => void;
+  onRemove: () => void;
+  disabled?: boolean;
+}) => (
+  <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#dbe3de] bg-[#fafcfb] p-3">
+    <span className="flex h-16 w-28 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#dbe3de] bg-[#eef3ef] text-[#8496a3]">
+      {thumbnail ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={thumbnail.url} alt="" className="h-full w-full object-cover" />
+      ) : (
+        <ImageIcon size={20} strokeWidth={1.75} />
+      )}
+    </span>
+    <div className="min-w-0 flex-1">
+      <div className="text-[12.5px] font-bold text-[#17242f]">
+        Video thumbnail <span className="font-medium text-[#7a8e9b]">(optional)</span>
+      </div>
+      <div className="mt-0.5 truncate text-[11px] text-[#7a8e9b]">
+        {thumbnail ? thumbnail.name : `The cover shown before the video plays — JPG, PNG or WebP, up to ${MEDIA_MAX_BYTES.image / (1024 * 1024)}MB`}
+      </div>
+    </div>
+    <label
+      className={`inline-flex items-center gap-1 rounded-md border border-[#cfdcd6] bg-white px-2.5 py-1.5 text-[11.5px] font-semibold ${
+        disabled ? "cursor-not-allowed text-[#c4cfd6]" : "cursor-pointer text-[#273847] hover:border-[#2563eb] hover:text-[#2563eb]"
+      }`}
+    >
+      <ImageIcon size={12} strokeWidth={2.25} /> {thumbnail ? "Change" : "Add thumbnail"}
+      <input
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/gif"
+        disabled={disabled}
+        className="hidden"
+        onChange={(event) => {
+          const [file] = Array.from(event.target.files ?? []);
+          if (file) onPick(file);
+          // Let the same file be picked again after removing it.
+          event.target.value = "";
+        }}
+      />
+    </label>
+    {thumbnail ? (
+      <button
+        type="button"
+        onClick={onRemove}
+        disabled={disabled}
+        className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[#f0b8b8] bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-[#b42318] hover:bg-[#fdecec] disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <X size={12} strokeWidth={2.5} /> Remove
+      </button>
+    ) : null}
+  </div>
+);
 
 // A hidden file input inside whatever should open the picker.
 export const FileInput = ({ kind, multiple, onPick }: { kind: ContentKind; multiple: boolean; onPick: (files: File[]) => void }) => (
@@ -298,7 +375,7 @@ export const Lightbox = ({
   );
 };
 
-// Drag files in, or click to pick — up to the kind's limit. One file shows as a full
+// Drag files in, or click to pick — as many as the piece needs. One file shows as a full
 // preview; several show as small cards that open full-size when clicked.
 export const UploadBox = ({
   kind,
@@ -316,7 +393,6 @@ export const UploadBox = ({
   const [dragging, setDragging] = useState(false);
   const [viewing, setViewing] = useState<number | null>(null);
   const spec = CONTENT_KINDS[kind];
-  const room = files.length < spec.maxFiles;
   // The kind's own colors, for the hover and drag states.
   const tint = { "--kind": spec.color, "--kind-bg": spec.background } as CSSProperties;
 
@@ -335,12 +411,12 @@ export const UploadBox = ({
 
   const countLine = (
     <span>
-      {files.length} of {spec.maxFiles} files
+      {files.length} files
       {files.length < spec.minFiles ? (
         <span className="font-semibold text-[#a35a12]"> · add at least {spec.minFiles}</span>
-      ) : room ? (
+      ) : (
         " · drag in more to add them"
-      ) : null}
+      )}
     </span>
   );
 
@@ -393,25 +469,21 @@ export const UploadBox = ({
     );
   }
 
-  // Several files: an "add more" tile first (while there's room), then small numbered cards.
+  // Several files: an "add more" tile first, then small numbered cards.
   if (files.length > 1) {
     return (
       <div className="rounded-xl border border-[#dbe3de] bg-[#fafcfb] p-3" {...dragProps}>
         <div className="grid grid-cols-5 gap-2.5">
-          {room ? (
-            <label
-              style={tint}
-              className={`flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed text-[11.5px] font-semibold ${
-                dragging
-                  ? "border-(--kind) bg-(--kind-bg) text-(--kind)"
-                  : "border-[#cbd6d0] text-[#7a8e9b] hover:border-(--kind) hover:text-(--kind)"
-              }`}
-            >
-              <Plus size={20} strokeWidth={2} />
-              Add more
-              <FileInput kind={kind} multiple onPick={onPick} />
-            </label>
-          ) : null}
+          <label
+            style={tint}
+            className={`flex aspect-square cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed text-[11.5px] font-semibold ${
+              dragging ? "border-(--kind) bg-(--kind-bg) text-(--kind)" : "border-[#cbd6d0] text-[#7a8e9b] hover:border-(--kind) hover:text-(--kind)"
+            }`}
+          >
+            <Plus size={20} strokeWidth={2} />
+            Add more
+            <FileInput kind={kind} multiple onPick={onPick} />
+          </label>
           {files.map((file, index) => (
             <FileCard key={file.url} file={file} index={index} onOpen={() => setViewing(index)} onRemove={() => onRemove(index)} />
           ))}
@@ -449,16 +521,14 @@ export const UploadBox = ({
             {files.length < spec.minFiles ? <span className="font-semibold text-[#a35a12]"> · add at least {spec.minFiles}</span> : null}
           </div>
         </div>
-        {room ? (
-          <label
-            style={tint}
-            title={`Add more ${uploadNoun(kind)} — up to ${spec.maxFiles}`}
-            className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-(--kind) bg-(--kind-bg) px-2.5 py-1.5 text-[11.5px] font-semibold text-(--kind) hover:brightness-95"
-          >
-            <Plus size={12} strokeWidth={2.5} /> Add more
-            <FileInput kind={kind} multiple onPick={onPick} />
-          </label>
-        ) : null}
+        <label
+          style={tint}
+          title={`Add more ${uploadNoun(kind)}`}
+          className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-(--kind) bg-(--kind-bg) px-2.5 py-1.5 text-[11.5px] font-semibold text-(--kind) hover:brightness-95"
+        >
+          <Plus size={12} strokeWidth={2.5} /> Add more
+          <FileInput kind={kind} multiple onPick={onPick} />
+        </label>
         <label className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-[#cfdcd6] bg-white px-2.5 py-1.5 text-[11.5px] font-semibold text-[#273847] hover:bg-[#f1f5f3]">
           <RefreshCw size={12} strokeWidth={2.25} /> Replace
           <FileInput
