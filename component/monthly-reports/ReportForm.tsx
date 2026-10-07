@@ -74,6 +74,7 @@ type SocialKey = (typeof SOCIAL_FIELDS)[number][1];
 type WebsiteKey = (typeof WEBSITE_FIELDS)[number][1];
 type GmbKey = (typeof GMB_FIELDS)[number][1];
 
+type VideoRow = { title: string; views: string; impressions: string };
 type BlogRow = { title: string; url: string; publishedAt: string; graphicsCount: string };
 type LocationRow = { name: string; impressions: string; calls: string; directions: string };
 
@@ -83,7 +84,8 @@ interface Values {
   // "2026-09" for a month, "2026-09-07" (the first day) for a week.
   periodValue: string;
   summary: string;
-  social: Record<SocialKey, string> & { reelTitle: string; reelViews: string };
+  social: Record<SocialKey, string>;
+  videos: VideoRow[];
   blogs: BlogRow[];
   website: Record<WebsiteKey, string>;
   gmb: Record<GmbKey, string>;
@@ -96,6 +98,7 @@ const MAX_ROWS = 100;
 const blank = <K extends string>(keys: readonly (readonly [string, K, string])[]) =>
   Object.fromEntries(keys.map(([, key]) => [key, ""])) as Record<K, string>;
 
+const emptyVideo = (): VideoRow => ({ title: "", views: "", impressions: "" });
 const emptyBlog = (): BlogRow => ({ title: "", url: "", publishedAt: "", graphicsCount: "" });
 const emptyLocation = (): LocationRow => ({ name: "", impressions: "", calls: "", directions: "" });
 
@@ -109,9 +112,11 @@ const valuesFrom = (report?: Report): Values => ({
   social: {
     ...blank(SOCIAL_FIELDS),
     ...Object.fromEntries(SOCIAL_FIELDS.map(([, key]) => [key, text(report?.social?.[key])])),
-    reelTitle: report?.social?.reel?.title ?? "",
-    reelViews: text(report?.social?.reel?.views),
   } as Values["social"],
+  // An older report held one best-performing video: it becomes the first row.
+  videos: report?.social?.videos?.length
+    ? report.social.videos.map((video) => ({ title: video.title, views: text(video.views), impressions: text(video.impressions) }))
+    : [{ title: report?.social?.reel?.title ?? "", views: text(report?.social?.reel?.views), impressions: "" }],
   blogs: (report?.blogs.length ? report.blogs : [undefined]).map((blog) =>
     blog
       ? { title: blog.title, url: blog.url ?? "", publishedAt: blog.publishedAt?.slice(0, 10) ?? "", graphicsCount: text(blog.graphicsCount) }
@@ -138,7 +143,8 @@ const includedFrom = (report?: Report): Record<SectionKey, boolean> => {
   const anyNumber = (section?: object) =>
     Boolean(section) && Object.values(section as Record<string, unknown>).some((value) => typeof value === "number");
   return {
-    social: anyNumber(report?.social) || Boolean(report?.social?.reel?.title) || anyNumber(report?.social?.reel),
+    social:
+      anyNumber(report?.social) || (report?.social?.videos?.length ?? 0) > 0 || Boolean(report?.social?.reel?.title) || anyNumber(report?.social?.reel),
     blogs: (report?.blogs.length ?? 0) > 0,
     website: anyNumber(report?.website),
     gmb: anyNumber(report?.gmb) || (report?.gmb?.locations.length ?? 0) > 0,
@@ -191,14 +197,24 @@ const buildContent = (values: Values, included: Record<SectionKey, boolean>, isE
 
   const socialOn = included.social;
   const socialFigures = figures(values.social, SOCIAL_FIELDS, socialOn);
-  const reelViews = socialOn ? parseFigure(values.social.reelViews) : null;
-  if (reelViews === "invalid") problems.push("Reel views: use whole numbers only");
-  const reel = {
-    ...(socialOn && values.social.reelTitle.trim() ? { title: values.social.reelTitle.trim() } : isEdit ? { title: "" } : {}),
-    ...(typeof reelViews === "number" ? { views: reelViews } : isEdit ? { views: null } : {}),
-  };
-  if (isEdit || Object.keys(socialFigures).length || Object.keys(reel).length) {
-    content.social = { ...socialFigures, ...(Object.keys(reel).length ? { reel } : {}) };
+  const videos = socialOn
+    ? values.videos.flatMap((row) => {
+        const title = row.title.trim();
+        const parsed = [row.views, row.impressions].map(parseFigure);
+        if (!title && parsed.every((value) => value === null)) return [];
+        if (!title) problems.push("Every video needs a title");
+        if (parsed.includes("invalid")) problems.push(`Figures for "${title || "a video"}": use whole numbers only`);
+        const [views, impressions] = parsed;
+        return [{ title, ...(typeof views === "number" ? { views } : {}), ...(typeof impressions === "number" ? { impressions } : {}) }];
+      })
+    : [];
+  if (isEdit || Object.keys(socialFigures).length || videos.length) {
+    content.social = {
+      ...socialFigures,
+      ...(isEdit || videos.length ? { videos } : {}),
+      // An older report's single video is in the list now (see valuesFrom) — clear where it was kept.
+      ...(isEdit ? { reel: { title: "", views: null } } : {}),
+    };
   }
 
   const blogs = included.blogs
@@ -418,6 +434,8 @@ const ReportForm = ({
 
   const patch = (changes: Partial<Values>) => setValues((current) => ({ ...current, ...changes }));
   const toggle = (key: SectionKey) => setIncluded((current) => ({ ...current, [key]: !current[key] }));
+  const setVideo = (index: number, changes: Partial<VideoRow>) =>
+    patch({ videos: values.videos.map((row, i) => (i === index ? { ...row, ...changes } : row)) });
   const setBlog = (index: number, changes: Partial<BlogRow>) =>
     patch({ blogs: values.blogs.map((row, i) => (i === index ? { ...row, ...changes } : row)) });
   const setLocation = (index: number, changes: Partial<LocationRow>) =>
@@ -645,7 +663,7 @@ const ReportForm = ({
             </div>
           </div>
 
-          <SectionCard index={1} title="Social Media Content Performance" sub="Reach per platform and the best-performing video" icons={[Camera, Smartphone, Mail]} included={included.social} disabled={readOnly} onToggle={() => toggle("social")}>
+          <SectionCard index={1} title="Social Media Content Performance" sub="Reach per platform and the period's videos" icons={[Camera, Smartphone, Mail]} included={included.social} disabled={readOnly} onToggle={() => toggle("social")}>
             <div className={tableSubtitle}>Platform Reach</div>
             <table className={dataTable}>
               <thead>
@@ -667,26 +685,45 @@ const ReportForm = ({
             </table>
 
             <div className={`${tableSubtitle} mt-4`}>
-              Best-performing Video
+              Videos
             </div>
             <table className={dataTable}>
               <thead>
                 <tr className={dataTr}>
-                  <th className={`${dataTh} w-[72%]`}>Video Title</th>
-                  <th className={dataTh}>Views</th>
+                  <th className={`${dataTh} w-[46%]`}>Video Title</th>
+                  <th className={`${dataTh} w-[24%]`}>Views</th>
+                  <th className={`${dataTh} w-[24%]`}>Impressions</th>
+                  <th className={`${dataTh} w-[6%]`} />
                 </tr>
               </thead>
               <tbody>
-                <tr className={dataTr}>
-                  <td className={dataTd}>
-                    <input type="text" className={inputPill} aria-label="Video title" placeholder="e.g. Know Your Rights — Reel" value={values.social.reelTitle} disabled={disabled} onChange={(event) => patch({ social: { ...values.social, reelTitle: event.target.value } })} />
-                  </td>
-                  <td className={dataTd}>
-                    <FigureInput label="Video views" value={values.social.reelViews} placeholder="e.g. 14,300" disabled={disabled} onChange={(value) => patch({ social: { ...values.social, reelViews: value } })} />
-                  </td>
-                </tr>
+                {values.videos.map((row, index) => (
+                  <tr key={index} className={dataTr}>
+                    <td className={dataTd}>
+                      <input type="text" className={inputPill} aria-label="Video title" placeholder="e.g. Know Your Rights — Reel" value={row.title} disabled={disabled} onChange={(event) => setVideo(index, { title: event.target.value })} />
+                    </td>
+                    <td className={dataTd}>
+                      <FigureInput label="Video views" value={row.views} placeholder="e.g. 14,300" disabled={disabled} onChange={(value) => setVideo(index, { views: value })} />
+                    </td>
+                    <td className={dataTd}>
+                      <FigureInput label="Video impressions" value={row.impressions} placeholder="e.g. 32,800" disabled={disabled} onChange={(value) => setVideo(index, { impressions: value })} />
+                    </td>
+                    <td className={dataTd}>
+                      {!readOnly ? (
+                        <RemoveRowButton
+                          label="Remove video"
+                          // There is always at least one video row to fill in.
+                          disabled={values.videos.length <= 1}
+                          reason="At least one video row is needed"
+                          onClick={() => patch({ videos: values.videos.filter((_, i) => i !== index) })}
+                        />
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
+            {values.videos.length < MAX_ROWS ? <AddRowButton disabled={readOnly} onClick={() => patch({ videos: [...values.videos, emptyVideo()] })} /> : null}
           </SectionCard>
 
           <SectionCard index={2} title="Blogs" sub="Published blogs for this period" included={included.blogs} disabled={readOnly} onToggle={() => toggle("blogs")}>
