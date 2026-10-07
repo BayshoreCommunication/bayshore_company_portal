@@ -33,7 +33,35 @@ export interface ContentComment {
   // May be empty when the comment is only attachments.
   text: string;
   attachments?: ContentFile[];
+  // On a client's request for changes: the revision round it belongs to (1, 2, …). The first
+  // comment with a number is the one that opened that round.
+  revision?: number;
   createdAt: string;
+}
+
+// One thing the client asked for during a revision: their words, and any files they sent.
+export interface ContentRevisionRequest {
+  text: string;
+  attachments?: ContentFile[];
+  name?: string;
+  createdAt: string;
+}
+
+// One round of changes on a piece: what the client asked for, and the team's answer. A piece —
+// a reel, a post, an image, a video — can go through any number of these.
+export interface ContentRevision {
+  // 1, 2, … in the order they were asked for.
+  number: number;
+  // Empty when a manager opened the round on the client's behalf.
+  requests: ContentRevisionRequest[];
+  requestedAt: string;
+  requestedByName?: string;
+  // The team's feedback on it, in order: what was changed, with any files.
+  responses?: ContentRevisionRequest[];
+  // Set once the revised piece has been sent back, with the note left for the client.
+  submittedAt?: string;
+  submittedByName?: string;
+  note?: string;
 }
 
 // One uploaded file, stored in DigitalOcean Spaces.
@@ -43,6 +71,17 @@ export interface ContentFile {
   size: number;
   mimeType: string;
   media: ContentMedia;
+  // When it was added to the piece — the same moment for files added in one save. Missing on
+  // files from before this was kept, and on comment attachments.
+  uploadedAt?: string;
+}
+
+// A file the piece used to have: replaced while answering a revision, and kept so the two
+// can be compared.
+export interface ContentPreviousFile extends ContentFile {
+  replacedAt: string;
+  // The revision it was replaced in.
+  revision?: number;
 }
 
 // What a piece tells its group-mates about itself.
@@ -51,8 +90,16 @@ export interface ContentPiece {
   type: ContentType;
   title: string;
   status: ContentStatus;
+  // How many times the piece has been sent back for a revision.
+  revisionCount?: number;
+  // In revision, with no reply from the team since the client last asked for changes.
+  awaitingTeam?: boolean;
+  // The piece's revisions, oldest first — sent with a single piece's page, not with lists.
+  revisions?: ContentRevision[];
   // The piece's first image, when it has one.
   thumbnail?: string;
+  // The piece's messages, oldest first — sent with a single piece's page, not with lists.
+  comments?: ContentComment[];
 }
 
 export interface ContentItem {
@@ -77,10 +124,15 @@ export interface ContentItem {
   isIndividual: boolean;
 
   status: ContentStatus;
+  // How many times the piece has been sent back for a revision, and each of those rounds.
+  revisionCount?: number;
+  revisions?: ContentRevision[];
 
   // Up to 10 files, and/or a pasted link (video, blog, website, email).
   files?: ContentFile[];
   link?: string;
+  // Files replaced during a revision, newest first. `files` is always the piece as it stands.
+  previousFiles?: ContentPreviousFile[];
   pageName?: string;
   pageUrl?: string;
   subject?: string;
@@ -269,9 +321,11 @@ export async function updateContentAction(
 
 // draft → pending_approval is the normal move (and revision_requested → pending_approval,
 // once feedback has been addressed); what else a given role may do is decided by the backend.
+// `note` goes with a revised piece sent back for approval: what changed, for the client.
 export async function changeContentStatusAction(
   id: string,
   status: ContentStatus,
+  note?: string,
 ): Promise<ContentActionResult<ContentItem>> {
   const accessToken = await token();
   if (!accessToken) return NOT_SIGNED_IN;
@@ -280,7 +334,7 @@ export async function changeContentStatusAction(
     const response = await fetch(`${API}/${id}/status`, {
       method: "PATCH",
       headers: authorised(accessToken, true),
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...(note?.trim() ? { note: note.trim() } : {}) }),
     });
     if (!response.ok) return failure(response, "Failed to change the content status.");
 

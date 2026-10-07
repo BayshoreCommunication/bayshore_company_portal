@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, type DragEvent } from "react";
+import Link from "next/link";
 import toast from "react-hot-toast";
 import { Download, FileText, Loader2, MessageSquare, Paperclip, Play, Send, X } from "lucide-react";
-import type { ContentComment, ContentFile } from "@/app/actions/content";
+import type { ContentComment, ContentFile, ContentPiece } from "@/app/actions/content";
 import { initialsOf } from "@/component/clients/clientUi";
-import { formatDateTime, mediaOf, personNameOf, uploadProblem } from "./contentUi";
+import { formatDateTime, mediaOf, personNameOf, threadOf, uploadProblem } from "./contentUi";
 import { Lightbox, MEDIA_ICON, extensionOf, fileSize, type Upload } from "./contentForm";
 
 // The backend's CONTENT_COMMENT_MAX_ATTACHMENTS.
@@ -18,7 +19,7 @@ type CommentResponse = { success: boolean; message: string; data?: { comments: C
 const toUpload = (file: ContentFile): Upload => ({ name: file.name, size: file.size, url: file.url, media: file.media, mime: file.mimeType });
 
 // Sends the comment to the upload route, reporting progress (0–100) as files go up.
-const postComment = (contentId: string, form: FormData, onProgress: (percent: number) => void) =>
+export const postComment = (contentId: string, form: FormData, onProgress: (percent: number) => void) =>
   new Promise<{ status: number; body: CommentResponse }>((resolve, reject) => {
     const request = new XMLHttpRequest();
     request.open("POST", `/api/content/${contentId}/comments`);
@@ -101,10 +102,14 @@ const Attachments = ({ files, onOpen }: { files: ContentFile[]; onOpen: (index: 
   );
 };
 
-// The conversation on a piece: every comment with its attachments, and a box to
-// comment, reply, and attach images, videos or documents.
+// The conversation on a piece — the client on the left, the team on the right: every message
+// with its attachments, and a box to write, reply, and attach images, videos or documents.
+// A client's request for changes carries the revision it belongs to. Pieces saved together
+// share one conversation: the messages written on the others (`pieces`) are shown in with
+// this one's, each saying which piece it is about. What is written here goes on this piece.
 const CommentThread = ({
   contentId,
+  pieces,
   comments: initialComments,
   clientName,
   canComment,
@@ -112,6 +117,9 @@ const CommentThread = ({
   onPosted,
 }: {
   contentId: string;
+  // The piece's group, this piece included — a group of one when it was saved alone.
+  pieces: ContentPiece[];
+  // This piece's own messages.
   comments: ContentComment[];
   clientName: string;
   canComment: boolean;
@@ -128,6 +136,9 @@ const CommentThread = ({
     setComments(initialComments);
   }
 
+  const thread = threadOf(pieces, contentId, comments);
+  const grouped = pieces.length > 1;
+
   const [text, setText] = useState("");
   const [picked, setPicked] = useState<Picked[]>([]);
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -142,7 +153,7 @@ const CommentThread = ({
   // Keep the newest comment in view.
   useEffect(() => {
     threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight });
-  }, [comments.length]);
+  }, [thread.length]);
 
   // Free preview URLs when files leave the box or the page closes.
   const pickedRef = useRef(picked);
@@ -226,14 +237,14 @@ const CommentThread = ({
 
   return (
     <div>
-      {comments.length ? (
+      {thread.length ? (
         <div ref={threadRef} className={`flex ${maxHeight} flex-col gap-3 overflow-y-auto pr-1`}>
-          {comments.map((entry, index) => {
+          {thread.map((entry, index) => {
             const fromClient = entry.author === "client";
             const author = authorOf(entry);
             const files = entry.attachments ?? [];
             return (
-              <div key={`${entry.createdAt}-${index}`} className="flex gap-2">
+              <div key={`${entry.createdAt}-${index}`} className={`flex gap-2 ${fromClient ? "" : "flex-row-reverse"}`}>
                 <span
                   className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${
                     fromClient ? "bg-[#2563eb]" : "bg-[#0f1c2a]"
@@ -241,10 +252,11 @@ const CommentThread = ({
                 >
                   {initialsOf(author)}
                 </span>
-                <div className="min-w-0 flex-1">
+                {/* The client's side sits on the left, the team's on the right. */}
+                <div className={`flex min-w-0 flex-1 flex-col ${fromClient ? "items-start" : "items-end"}`}>
                   <div
-                    className={`rounded-lg rounded-tl-sm border px-2.75 py-2 ${
-                      fromClient ? "border-[#dbeafe] bg-[#f5f9ff]" : "border-[#eef3ef] bg-[#fafcfb]"
+                    className={`max-w-[92%] rounded-lg border px-2.75 py-2 ${
+                      fromClient ? "rounded-tl-sm border-[#dbeafe] bg-[#f5f9ff]" : "rounded-tr-sm border-[#e3eae6] bg-[#f4f7f5]"
                     }`}
                   >
                     <div className="flex flex-wrap items-center gap-x-1.5 text-[11px]">
@@ -256,13 +268,30 @@ const CommentThread = ({
                       >
                         {fromClient ? "Client" : "Team"}
                       </span>
+                      {entry.revision ? (
+                        <span className="rounded-full bg-[#fde8e8] px-1.5 text-[9.5px] font-bold text-[#b91c1c]">
+                          {entry.asks ? "Revision request" : "Revision"} {entry.revision}
+                        </span>
+                      ) : null}
+                      {/* Which piece of the group the message is about; another piece's opens it. */}
+                      {!grouped ? null : entry.piece._id === contentId ? (
+                        <span className="rounded-full bg-[#eef3ef] px-1.5 text-[9.5px] font-bold text-[#556977]">Piece {entry.at + 1} · this piece</span>
+                      ) : (
+                        <Link
+                          href={`/content/${entry.piece._id}`}
+                          title={entry.piece.title}
+                          className="max-w-44 truncate rounded-full bg-[#eef3ef] px-1.5 text-[9.5px] font-bold text-[#556977] no-underline hover:bg-[#dbeafe] hover:text-[#1d4ed8]"
+                        >
+                          Piece {entry.at + 1} · {entry.piece.title}
+                        </Link>
+                      )}
                     </div>
                     {entry.text ? (
                       <div className="mt-0.5 text-[12px] leading-normal break-words whitespace-pre-line text-[#33434f]">{entry.text}</div>
                     ) : null}
                     {files.length ? <Attachments files={files} onOpen={(at) => setViewing({ files: files.map(toUpload), index: at })} /> : null}
                   </div>
-                  <div className="mt-0.5 flex items-center gap-2 pl-1 text-[10.5px] text-[#8496a3]">
+                  <div className="mt-0.5 flex items-center gap-2 px-1 text-[10.5px] text-[#8496a3]">
                     <span>{formatDateTime(entry.createdAt)}</span>
                     {files.length ? (
                       <span className="inline-flex items-center gap-0.5">
@@ -283,7 +312,7 @@ const CommentThread = ({
       ) : (
         <div className="flex flex-col items-center gap-1.5 rounded-lg border border-dashed border-[#dbe3de] py-5 text-center">
           <MessageSquare size={18} strokeWidth={1.75} className="text-[#b4c2bb]" />
-          <div className="text-[12px] font-semibold text-[#7a8e9b]">No comments yet</div>
+          <div className="text-[12px] font-semibold text-[#7a8e9b]">No messages yet</div>
           {canComment ? <div className="text-[11px] text-[#9aacb8]">Start the conversation below.</div> : null}
         </div>
       )}
@@ -330,7 +359,7 @@ const CommentThread = ({
                 addFiles(files);
               }
             }}
-            placeholder={dragging ? "Drop files to attach them" : replyTo ? `Reply to ${replyTo}…` : `Write a comment for ${clientName} or your team…`}
+            placeholder={dragging ? "Drop files to attach them" : replyTo ? `Reply to ${replyTo}…` : `Write a message for ${clientName} or your team…`}
             className="block w-full resize-none border-none bg-transparent px-2.75 pt-2.25 text-[12.5px] text-[#17242f] outline-none"
           />
 
@@ -418,7 +447,7 @@ const CommentThread = ({
                 </>
               ) : (
                 <>
-                  <Send size={12} strokeWidth={2.25} /> {replyTo ? "Reply" : "Comment"}
+                  <Send size={12} strokeWidth={2.25} /> {replyTo ? "Reply" : "Send"}
                 </>
               )}
             </button>

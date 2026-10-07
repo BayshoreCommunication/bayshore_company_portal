@@ -2,9 +2,9 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { ChevronLeft, ChevronRight, Layers } from "lucide-react";
+import { ChevronLeft, ChevronRight, Layers, RotateCcw } from "lucide-react";
 import type { ContentPiece } from "@/app/actions/content";
-import { CONTENT_KINDS, STATUS_BADGES } from "./contentUi";
+import { CONTENT_KINDS, STATUS_BADGES, revisionNoteOf } from "./contentUi";
 
 // When several pieces were saved together, this sits at the top of each one's page and says
 // so plainly: how many there are, which one is on screen, how many are approved — and a tile
@@ -146,8 +146,15 @@ const GroupPieces = ({
                   Piece {index + 1} · {kind.label}
                 </span>
                 <span className="mt-0.5 block truncate text-[13px] font-bold text-[#17242f]">{piece.title}</span>
-                <span className={`${state.badge} mt-1.5`}>
-                  <span className={state.dot} /> {state.label}
+                <span className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className={state.badge}>
+                    <span className={state.dot} /> {state.label}
+                  </span>
+                  {revisionNoteOf(piece) ? (
+                    <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-[#7a8e9b]">
+                      <RotateCcw size={10} strokeWidth={2.25} /> {revisionNoteOf(piece)}
+                    </span>
+                  ) : null}
                 </span>
               </span>
 

@@ -18,7 +18,9 @@ const MainLayout = async ({ children }: { children: React.ReactNode }) => {
     <NavigationProvider>
       <div className="flex min-h-screen">
         <Sidebar />
-        <div className="flex flex-1 flex-col overflow-y-auto">
+        {/* No overflow here on purpose: the window is what scrolls, and an overflow container that
+            never scrolls would stop `sticky` from working on every page inside it. */}
+        <div className="flex min-w-0 flex-1 flex-col">
           <Topbar user={session.user} />
           <div className="flex flex-col gap-4.5 px-9 pt-6 pb-10">
             <PageArea>{children}</PageArea>

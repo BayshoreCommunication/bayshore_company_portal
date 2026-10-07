@@ -59,6 +59,7 @@ import {
   monthChoices,
   personNameOf,
   piecesOf,
+  revisionNoteOf,
   type ContentListFilters,
 } from "./contentUi";
 
@@ -370,6 +371,8 @@ const ContentList = ({
                   const pieces = piecesOf(item);
                   const grouped = pieces.length > 1;
                   const badge = STATUS_BADGES[groupStatusOf(pieces)];
+                  // How many times the client has sent it back — all its pieces together.
+                  const revised = pieces.reduce((sum, piece) => sum + (piece.revisionCount ?? 0), 0);
                   const approved = pieces.filter((piece) => piece.status === "approved").length;
                   const kinds = [...new Set(pieces.map((piece) => piece.type))].map((type) => CONTENT_KINDS[type] ?? CONTENT_KINDS.image);
 
@@ -433,6 +436,12 @@ const ContentList = ({
                         {grouped ? (
                           <div className="mt-1 text-[11px] text-[#7a8e9b]">
                             {approved} of {pieces.length} approved
+                          </div>
+                        ) : null}
+                        {revised > 0 ? (
+                          <div className="mt-1 flex items-center gap-1 text-[11px] text-[#7a8e9b]">
+                            <RotateCcw size={11} strokeWidth={2.25} />
+                            {grouped ? `${revised} revision${revised === 1 ? "" : "s"}` : revisionNoteOf(pieces[0])}
                           </div>
                         ) : null}
                       </td>

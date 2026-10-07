@@ -833,6 +833,7 @@ const EditContent = ({ item, canReview }: { item: ContentItem; canReview: boolea
               ) : null}
               <CommentThread
                 contentId={item._id}
+                pieces={pieces}
                 comments={item.comments}
                 clientName={clientName}
                 canComment
