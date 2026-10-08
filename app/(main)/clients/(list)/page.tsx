@@ -1,10 +1,14 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { listClientsAction } from "@/app/actions/clients";
+import { listOnboardingRequestsAction } from "@/app/actions/onboarding";
 import ClientCard from "@/component/clients/ClientCard";
 import { CLIENTS_PER_PAGE, canManageClients, clientsHref, isClientStatus } from "@/component/clients/clientUi";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+// How many onboarding requests the top of the page lists.
+const ONBOARDING_REQUESTS_SHOWN = 8;
 
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
@@ -19,6 +23,9 @@ const ClientsPage = async ({ searchParams }: { searchParams: SearchParams }) => 
     auth(),
     listClientsAction({ page, limit: CLIENTS_PER_PAGE, status, search }),
   ]);
+  const canManage = canManageClients(session?.user?.role);
+  // New clients who came in through the onboarding form and are waiting to be taken on.
+  const requests = canManage ? await listOnboardingRequestsAction({ limit: ONBOARDING_REQUESTS_SHOWN }) : undefined;
 
   // A stale or hand-edited ?page=99 lands on the last page that exists instead of an empty list.
   const totalPages = result.data?.pagination.totalPages ?? 0;
@@ -30,7 +37,8 @@ const ClientsPage = async ({ searchParams }: { searchParams: SearchParams }) => 
       error={result.error}
       status={status}
       search={search}
-      canManage={canManageClients(session?.user?.role)}
+      canManage={canManage}
+      requests={requests?.ok ? requests.data : undefined}
     />
   );
 };

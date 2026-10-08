@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Calendar, Hourglass, Plus, RotateCcw, Search, SearchX, UserCheck, UserX, Users, X } from "lucide-react";
 import type { Client, ClientListData } from "@/app/actions/clients";
+import type { OnboardingRequestList } from "@/app/actions/onboarding";
 import { pageItems } from "@/component/shared/pageItems";
 import {
   btnDraft,
@@ -29,6 +30,7 @@ import {
   tagChip,
 } from "@/component/shared/ui";
 import { CLIENT_STATUS_OPTIONS, avatarColorFor, clientsHref, formatDate, initialsOf, statusClassName, statusLabel } from "./clientUi";
+import OnboardingRequests from "./OnboardingRequests";
 
 const SEARCH_DELAY_MS = 400;
 
@@ -309,19 +311,22 @@ const Pagination = ({ pagination, status, search }: { pagination: ClientListData
 // ── The Clients page ─────────────────────────────────────────────────────────
 
 // Every client as a card, with summary counts, status tabs, search and page numbers.
-// `data` is missing when the list couldn't be loaded; `error` says why.
+// `data` is missing when the list couldn't be loaded; `error` says why. `requests` are the
+// onboardings waiting to be taken on, shown above everything else — for those who manage clients.
 const ClientCard = ({
   data,
   error,
   status,
   search,
   canManage,
+  requests,
 }: {
   data?: ClientListData;
   error?: string;
   status: string;
   search: string;
   canManage: boolean;
+  requests?: OnboardingRequestList;
 }) => (
   <>
     <div className={headlineRow}>
@@ -335,6 +340,8 @@ const ClientCard = ({
         </Link>
       ) : null}
     </div>
+
+    {requests ? <OnboardingRequests data={requests} /> : null}
 
     {!data ? (
       <div className={formErrorBanner} role="alert">

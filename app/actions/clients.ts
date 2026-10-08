@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { BACKEND_API_URL } from "@/lib/backend";
+import type { OnboardingAnswers } from "./onboarding";
 
 const API = `${BACKEND_API_URL}/clients`;
 
@@ -39,6 +40,9 @@ export interface Client {
   startDate: string;
   status: ClientStatus;
   notes?: string;
+  // What the client answered on the onboarding form, if they went through it. Comes with a
+  // single client, not with the list.
+  onboarding?: OnboardingAnswers;
   // Populated objects on read, plain ids if not populated.
   user?: ClientLogin | string;
   accountManager?: ClientStaff | string;
