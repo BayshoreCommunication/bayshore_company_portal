@@ -1,13 +1,13 @@
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { getClientAction } from "@/app/actions/clients";
-import ClientForm from "@/component/clients/ClientForm";
+import { getClientAction, listStaffAction } from "@/app/actions/clients";
+import ClientEdit from "@/component/clients/ClientEdit";
 import { canManageClients } from "@/component/clients/clientUi";
 import { formErrorBanner } from "@/component/shared/ui";
 
 const EditClientPage = async ({ params }: { params: Promise<{ slug: string }> }) => {
   const { slug } = await params;
-  const [session, result] = await Promise.all([auth(), getClientAction(slug)]);
+  const [session, result, staff] = await Promise.all([auth(), getClientAction(slug), listStaffAction()]);
 
   if (!canManageClients(session?.user?.role)) redirect(`/clients/${slug}`);
   if (result.status === 404 || result.status === 422) notFound();
@@ -20,7 +20,7 @@ const EditClientPage = async ({ params }: { params: Promise<{ slug: string }> })
     );
   }
 
-  return <ClientForm client={result.data} />;
+  return <ClientEdit client={result.data} staff={staff} />;
 };
 
 export default EditClientPage;

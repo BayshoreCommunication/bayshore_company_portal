@@ -121,18 +121,6 @@ const Sidebar = () => {
           </Fragment>
         ))}
       </ul>
-
-      <div className="mt-auto rounded-lg bg-[#0f1c2c] p-3.5">
-        <p className="mb-2.5 text-[11px] leading-[1.4] text-[#7b8e9f]">
-          Need help managing your account? We&apos;re here for you.
-        </p>
-        <a
-          href="#"
-          className="block w-full rounded-[5px] border border-[#23374e] bg-[#15273c] p-1.75 text-center text-[11.5px] font-semibold text-[#d1dbe5] no-underline"
-        >
-          Contact Support
-        </a>
-      </div>
     </div>
   );
 };

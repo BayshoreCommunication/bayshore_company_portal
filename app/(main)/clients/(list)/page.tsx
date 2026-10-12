@@ -1,44 +1,43 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { listClientsAction } from "@/app/actions/clients";
-import { listOnboardingRequestsAction } from "@/app/actions/onboarding";
-import ClientCard from "@/component/clients/ClientCard";
+import { listClientsAction, type ClientStatus } from "@/app/actions/clients";
+import ClientList from "@/component/clients/ClientList";
 import { CLIENTS_PER_PAGE, canManageClients, clientsHref, isClientStatus } from "@/component/clients/clientUi";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
-
-// How many onboarding requests the top of the page lists.
-const ONBOARDING_REQUESTS_SHOWN = 8;
 
 const first = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value);
 
 const ClientsPage = async ({ searchParams }: { searchParams: SearchParams }) => {
   const params = await searchParams;
   const rawStatus = first(params.status);
-  const status = isClientStatus(rawStatus) ? rawStatus : "all";
+  // The tab asked for, if one was: a status, or "all" for every client.
+  const chosen = rawStatus === "all" || isClientStatus(rawStatus) ? rawStatus : undefined;
   const search = first(params.q)?.trim() ?? "";
   const page = Math.max(1, Number(first(params.page)) || 1);
 
-  const [session, result] = await Promise.all([
-    auth(),
-    listClientsAction({ page, limit: CLIENTS_PER_PAGE, status, search }),
-  ]);
+  // With no tab asked for, the page opens on the clients who are onboarding — the new ones,
+  // who need looking at first — and on every client when nobody is.
+  let status: "all" | ClientStatus = chosen ?? "onboarding";
+  const [session, firstResult] = await Promise.all([auth(), listClientsAction({ page, limit: CLIENTS_PER_PAGE, status, search })]);
+  let result = firstResult;
+  if (!chosen && !result.data?.summary.onboarding) {
+    status = "all";
+    result = await listClientsAction({ page, limit: CLIENTS_PER_PAGE, status, search });
+  }
   const canManage = canManageClients(session?.user?.role);
-  // New clients who came in through the onboarding form and are waiting to be taken on.
-  const requests = canManage ? await listOnboardingRequestsAction({ limit: ONBOARDING_REQUESTS_SHOWN }) : undefined;
 
   // A stale or hand-edited ?page=99 lands on the last page that exists instead of an empty list.
   const totalPages = result.data?.pagination.totalPages ?? 0;
   if (totalPages > 0 && page > totalPages) redirect(clientsHref({ status, q: search, page: totalPages }));
 
   return (
-    <ClientCard
+    <ClientList
       data={result.ok ? result.data : undefined}
       error={result.error}
       status={status}
       search={search}
       canManage={canManage}
-      requests={requests?.ok ? requests.data : undefined}
     />
   );
 };

@@ -23,6 +23,14 @@ interface OnboardingPlatform {
 }
 
 // A Google or social account.
+// A file the client uploaded with their onboarding (a logo, photos, videos).
+export interface OnboardingFile {
+  url: string;
+  name: string;
+  size?: number;
+  mimeType?: string;
+}
+
 export interface OnboardingAccount {
   has?: OnboardingHas;
   link?: string;
@@ -32,11 +40,17 @@ export interface OnboardingAccount {
   needsHelp?: boolean;
   // They don't have one: should we create it?
   wantsCreated?: boolean;
+  // The account's own login, when that is how we get in. The password is kept sealed and is
+  // never shown: here it only says that there is one.
+  loginUsername?: string;
+  loginPassword?: string;
 }
 
 // One kind of photos or videos.
 export interface OnboardingMedia {
   mode?: "upload" | "create" | "none";
+  // What they uploaded.
+  files?: OnboardingFile[];
   // A shared folder holding them.
   link?: string;
   // What they need created.
@@ -48,9 +62,36 @@ export type OnboardingSocialAccount = "facebook" | "instagram" | "youtube" | "li
 export type OnboardingMediaKind = "professionalPhotos" | "businessPhotos" | "videos";
 
 // Every answer is optional — a missing one means the client didn't answer it.
+// A number as it is in a typical month today, and as the client would like it to be.
+export interface OnboardingTarget {
+  current?: number;
+  goal?: number;
+}
+
 export interface OnboardingAnswers {
   status: OnboardingStatus;
   submittedAt?: string;
+  // Asked in the steps a client goes through right after signing up (client-portal: ClientSignup).
+  business?: {
+    description?: string;
+    // The work they do for their own clients, and where those clients come from.
+    services?: string[];
+    areas?: string[];
+    contact?: { isAccountOwner?: boolean; name?: string; email?: string; phone?: string; reachBy?: "email" | "phone" | "text" };
+  };
+  goals?: {
+    // Each per month; money in US dollars.
+    revenue?: OnboardingTarget;
+    leads?: OnboardingTarget;
+    newClients?: OnboardingTarget;
+    timeframe?: string;
+    budget?: string;
+    costPerLead?: number;
+    clientValue?: number;
+    leadSources?: string[];
+  };
+  // Whether they say they booked the kickoff call.
+  kickoffCall?: { booked?: boolean };
   website?: {
     url?: string;
     hasNone?: boolean;
@@ -65,9 +106,11 @@ export interface OnboardingAnswers {
   cms?: OnboardingPlatform & { developer?: string };
   // Their business email — not the contact's own email.
   email?: { has?: OnboardingYesNo; provider?: string; wantsCreated?: boolean; accounts?: number; addresses?: string };
-  logo?: { has?: OnboardingYesNo; link?: string; wantsCreated?: boolean; style?: string };
+  // `files` are what the client uploaded; `link` is a shared folder instead of, or with, them.
+  logo?: { has?: OnboardingYesNo; link?: string; files?: OnboardingFile[]; wantsCreated?: boolean; style?: string };
   google?: Partial<Record<OnboardingGoogleAccount, OnboardingAccount>>;
-  social?: Partial<Record<OnboardingSocialAccount, OnboardingAccount>>;
+  // `metaAds` (the ad account behind Facebook and Instagram ads) is asked about at sign-up only.
+  social?: Partial<Record<OnboardingSocialAccount, OnboardingAccount>> & { metaAds?: OnboardingAccount };
   media?: Partial<Record<OnboardingMediaKind, OnboardingMedia>>;
 }
 
@@ -86,7 +129,7 @@ export interface OnboardingRequestSummary {
 // A request in full: the client it made, and every answer.
 export interface OnboardingRequest extends Omit<OnboardingRequestSummary, "onboarding"> {
   // "pending" until the team takes the client on.
-  status: "pending" | "active" | "on_hold" | "closed";
+  status: "onboarding" | "pending" | "active" | "on_hold" | "closed";
   serviceTypes: string[];
   accountManager?: { _id: string; fullName: string } | string;
   onboarding: OnboardingAnswers;

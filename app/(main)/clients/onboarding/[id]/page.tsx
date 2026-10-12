@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { getOnboardingRequestAction } from "@/app/actions/onboarding";
-import OnboardingRequestDetails from "@/component/clients/OnboardingRequestDetails";
+import { OnboardingRequestDetails } from "@/component/clients/ClientDetails";
 import { canDeleteClients } from "@/component/clients/clientUi";
 import { formErrorBanner } from "@/component/shared/ui";
 

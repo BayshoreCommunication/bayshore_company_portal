@@ -1,5 +1,5 @@
 // A placeholder shaped like the Clients list, shown by its loading.tsx while the
-// server renders — same summary cards, status tabs and client cards as ClientCard,
+// server renders — same summary cards, status tabs and client cards as ClientList,
 // so nothing jumps when the real page arrives.
 
 import { clientStatCard, clientStatsGrid, headlineRow } from "@/component/shared/ui";
@@ -14,7 +14,7 @@ const Bone = ({ className, delay = 0 }: { className: string; delay?: number }) =
 const CARDS = 6;
 
 // "All Clients (n)" and one tab per status — the first is the one selected.
-const TAB_WIDTHS = ["w-28", "w-22", "w-26", "w-24", "w-22"];
+const TAB_WIDTHS = ["w-28", "w-28", "w-22", "w-26", "w-24", "w-22"];
 
 export const ClientListSkeleton = () => (
   <div className="flex flex-col gap-4.5" role="status" aria-live="polite" aria-label="Loading clients">
@@ -68,9 +68,16 @@ export const ClientListSkeleton = () => (
                 <Bone key={chip} className={`h-6 rounded-xl ${["w-14", "w-20", "w-16"][chip]}`} delay={delay} />
               ))}
             </div>
-            <div className="mt-3.5 flex items-center justify-between border-t border-[#eef3ef] pt-3.5">
+            <div className="mt-3.5 flex items-center gap-1.5">
+              <Bone className="h-2.5 w-20" delay={delay} />
+              <Bone className="h-3 w-9" delay={delay} />
+            </div>
+            <div className="mt-3.5 border-t border-[#eef3ef] pt-3.5">
               <Bone className="h-2.5 w-32" delay={delay} />
-              <Bone className="h-7.5 w-26 bg-[#d5dcd8]" delay={delay} />
+              <div className="mt-3 flex gap-2">
+                <Bone className="h-8 flex-1 bg-[#d5dcd8]" delay={delay} />
+                <Bone className="h-8 flex-1" delay={delay} />
+              </div>
             </div>
           </div>
         );

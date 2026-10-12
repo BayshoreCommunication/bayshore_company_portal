@@ -3,9 +3,8 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Calendar, Hourglass, Plus, RotateCcw, Search, SearchX, UserCheck, UserX, Users, X } from "lucide-react";
+import { Calendar, Eye, Hourglass, Mail, Pencil, Phone, Plus, RotateCcw, Search, SearchX, UserCheck, UserX, Users, X } from "lucide-react";
 import type { Client, ClientListData } from "@/app/actions/clients";
-import type { OnboardingRequestList } from "@/app/actions/onboarding";
 import { pageItems } from "@/component/shared/pageItems";
 import {
   btnDraft,
@@ -29,8 +28,17 @@ import {
   searchClear,
   tagChip,
 } from "@/component/shared/ui";
-import { CLIENT_STATUS_OPTIONS, avatarColorFor, clientsHref, formatDate, initialsOf, statusClassName, statusLabel } from "./clientUi";
-import OnboardingRequests from "./OnboardingRequests";
+import {
+  CLIENT_STATUS_OPTIONS,
+  avatarColorFor,
+  clientsHref,
+  countsOf,
+  formatDate,
+  groupsOf,
+  initialsOf,
+  statusClassName,
+  statusLabel,
+} from "./clientUi";
 
 const SEARCH_DELAY_MS = 400;
 
@@ -40,40 +48,88 @@ const btnAddClient =
 
 // ── One client ───────────────────────────────────────────────────────────────
 
-const Card = ({ client }: { client: Client }) => (
-  <div className="flex flex-col rounded-[10px] border border-[#dbe3de] bg-white p-4.5">
-    <div className="mb-2.5 flex items-start justify-between">
+const cardButton =
+  "inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2.25 text-[12px] font-bold no-underline transition-colors duration-150";
+const cardLine = "flex min-w-0 items-center gap-2 text-[12px] text-[#556977]";
+
+// How far through the onboarding form the client is, as a percentage: the questions answered,
+// out of all of them (counted as the onboarding's own page counts them). A client who was never
+// sent through the form has answered none.
+const Progress = ({ client }: { client: Client }) => {
+  const { answered, total } = countsOf(groupsOf({ onboarding: client.onboarding ?? { status: "in_progress" } }));
+  const percent = total ? Math.round((answered / total) * 100) : 0;
+
+  return (
+    <span className="inline-flex shrink-0 items-baseline gap-1.5">
+      Onboarding
+      <b className={`rounded-md px-1.5 py-0.5 text-[11.5px] font-bold tabular-nums ${percent === 100 ? "bg-[#e5f6ea] text-[#15803d]" : "bg-[#eef1ef] text-[#0d1e2c]"}`}>{percent}%</b>
+    </span>
+  );
+};
+
+// `canManage` decides whether the card offers editing (the edit page turns everyone else away).
+const Card = ({ client, canManage }: { client: Client; canManage: boolean }) => (
+  <div className="flex flex-col rounded-xl border border-[#dbe3de] bg-white p-5 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[#c3d0c9] hover:shadow-[0_10px_28px_rgba(11,21,34,0.08)]">
+    {/* Who it is: the company, with its contact under it, and where it stands. */}
+    <div className="flex items-start gap-3">
       <div
-        className="flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-bold text-white"
+        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[14px] font-bold text-white"
         style={{ background: avatarColorFor(client._id) }}
       >
         {initialsOf(client.companyName)}
       </div>
+      <div className="min-w-0 flex-1 pt-0.5">
+        <div className="truncate text-[15px] leading-tight font-bold text-[#0d1e2c]" title={client.companyName}>
+          {client.companyName}
+        </div>
+        <div className="mt-1 truncate text-[12px] text-[#7a8e9b]">{client.contactName}</div>
+      </div>
       <span className={statusClassName(client.status)}>{statusLabel(client.status)}</span>
     </div>
-    <div className="text-[14.5px] font-bold text-[#0d1e2c]">{client.companyName}</div>
-    <div className="mt-0.75 text-[11.5px] leading-normal text-[#7a8e9b]">
-      {client.contactName}
-      <br />
-      {client.email}
-    </div>
-    <div className="mt-2.5 flex flex-wrap gap-2">
-      {client.serviceTypes.map((service) => (
-        <span className={tagChip} key={service}>
-          {service}
+
+    <div className="mt-4 flex flex-col gap-1.5">
+      <span className={cardLine}>
+        <Mail size={13} strokeWidth={2} className="shrink-0 text-[#8496a3]" />
+        <span className="truncate" title={client.email}>
+          {client.email}
         </span>
-      ))}
-    </div>
-    <div className="mt-3.5 flex items-center justify-between border-t border-[#eef3ef] pt-3.5">
-      <span className="inline-flex items-center gap-1.25 text-[10.5px] text-[#7a8e9b]">
-        <Calendar size={12} strokeWidth={2} /> Client since {formatDate(client.startDate)}
       </span>
-      <Link
-        href={`/clients/${client._id}`}
-        className="inline-flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-md bg-[#2563eb] px-3 py-1.75 text-[11px] font-bold text-white"
-      >
-        Select Client <ArrowRight size={13} strokeWidth={2.5} />
-      </Link>
+      {client.phone ? (
+        <span className={cardLine}>
+          <Phone size={13} strokeWidth={2} className="shrink-0 text-[#8496a3]" />
+          <span className="truncate">{client.phone}</span>
+        </span>
+      ) : null}
+    </div>
+
+    {client.serviceTypes.length ? (
+      <div className="mt-3.5 flex flex-wrap gap-1.5">
+        {client.serviceTypes.map((service) => (
+          <span className={tagChip} key={service}>
+            {service}
+          </span>
+        ))}
+      </div>
+    ) : null}
+
+    {/* Pushed to the bottom, so the buttons line up across a row of cards of different heights. */}
+    <div className="mt-auto pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-[#eef3ef] pt-3.5 text-[11.5px] text-[#7a8e9b]">
+        <span className="inline-flex items-center gap-1.5">
+          <Calendar size={12} strokeWidth={2} /> Client since {formatDate(client.startDate)}
+        </span>
+        <Progress client={client} />
+      </div>
+      <div className="mt-3.5 flex gap-2">
+        <Link href={`/clients/${client._id}`} className={`${cardButton} bg-[#2563eb] text-white hover:bg-[#1d4ed8]`}>
+          <Eye size={13} strokeWidth={2.5} /> View client
+        </Link>
+        {canManage ? (
+          <Link href={`/clients/${client._id}/edit`} className={`${cardButton} border border-[#dbe3de] bg-white text-[#17242f] hover:border-[#2563eb] hover:text-[#2563eb]`}>
+            <Pencil size={12} strokeWidth={2.5} /> Edit client
+          </Link>
+        ) : null}
+      </div>
     </div>
   </div>
 );
@@ -85,7 +141,14 @@ const Stats = ({ summary }: { summary: ClientListData["summary"] }) => {
   const stats = [
     { icon: Users, iconBg: "#dbeafe", iconColor: "#2563eb", label: "TOTAL CLIENTS", value: summary.total, note: "Across all statuses" },
     { icon: UserCheck, iconBg: "#dcf3e2", iconColor: "#16a34a", label: "ACTIVE CLIENTS", value: summary.active, note: `${share}% of total` },
-    { icon: Hourglass, iconBg: "#fdf1de", iconColor: "#c8973a", label: "PENDING ONBOARDING", value: summary.pending, note: "Need action" },
+    {
+      icon: Hourglass,
+      iconBg: "#fdf1de",
+      iconColor: "#c8973a",
+      label: "ONBOARDING / PENDING",
+      value: (summary.onboarding ?? 0) + summary.pending,
+      note: `${summary.onboarding ?? 0} onboarding · ${summary.pending} pending`,
+    },
     {
       icon: UserX,
       iconBg: "#fbdada",
@@ -165,7 +228,7 @@ const Toolbar = ({ status, search, summary }: { status: string; search: string; 
 
   const tabs = [
     { value: "all", label: `All Clients (${summary.total})` },
-    ...CLIENT_STATUS_OPTIONS.map((option) => ({ value: option.value as string, label: `${option.label} (${summary[option.value]})` })),
+    ...CLIENT_STATUS_OPTIONS.map((option) => ({ value: option.value as string, label: `${option.label} (${summary[option.value] ?? 0})` })),
   ];
 
   return (
@@ -311,22 +374,19 @@ const Pagination = ({ pagination, status, search }: { pagination: ClientListData
 // ── The Clients page ─────────────────────────────────────────────────────────
 
 // Every client as a card, with summary counts, status tabs, search and page numbers.
-// `data` is missing when the list couldn't be loaded; `error` says why. `requests` are the
-// onboardings waiting to be taken on, shown above everything else — for those who manage clients.
-const ClientCard = ({
+// `data` is missing when the list couldn't be loaded; `error` says why.
+const ClientList = ({
   data,
   error,
   status,
   search,
   canManage,
-  requests,
 }: {
   data?: ClientListData;
   error?: string;
   status: string;
   search: string;
   canManage: boolean;
-  requests?: OnboardingRequestList;
 }) => (
   <>
     <div className={headlineRow}>
@@ -341,8 +401,6 @@ const ClientCard = ({
       ) : null}
     </div>
 
-    {requests ? <OnboardingRequests data={requests} /> : null}
-
     {!data ? (
       <div className={formErrorBanner} role="alert">
         {error ?? "Could not load clients."}
@@ -356,7 +414,7 @@ const ClientCard = ({
         ) : (
           <div className="grid grid-cols-3 gap-4">
             {data.clients.map((client) => (
-              <Card client={client} key={client._id} />
+              <Card client={client} canManage={canManage} key={client._id} />
             ))}
           </div>
         )}
@@ -366,4 +424,4 @@ const ClientCard = ({
   </>
 );
 
-export default ClientCard;
+export default ClientList;
