@@ -388,12 +388,16 @@ export type Item = { id: string; name: string; label: string; tone: Tone; detail
 
 // What a field shows when the client left it empty.
 export const NONE = "None";
-export type Group = { title: string; items: Item[] };
+// `id` is the step's name on the client's own form (client-portal: onboardingData.ts → STEPS).
+export type Group = { id: string; title: string; items: Item[] };
 
 type Standing = [label: string, tone: Tone];
 const NOT_ANSWERED: Standing = ["Not answered", "none"];
 const NOT_NEEDED: Standing = ["Not needed", "none"];
 const NOT_SURE = "Not sure";
+
+// The website builder a developer holds the keys to, as the client's form names it.
+const BUILT_BY_DEVELOPER = "Custom / built by a developer";
 
 // Site builders that host the site themselves: with one of these there is no hosting to get into.
 const BUILDERS = ["Wix", "Squarespace", "Shopify"];
@@ -433,14 +437,29 @@ const platformStanding = (entry: NonNullable<OnboardingAnswers["domain"]>, creat
   return NOT_ANSWERED;
 };
 
-const accountItem = (id: string, name: string, account: OnboardingAccount = {}): Item => {
+// The accounts we sign in to with their own login, typed on the client's form: the rest are
+// shared with our access email — or, for a Facebook Page, with our profile.
+const LOGIN_ACCOUNTS = ["instagram", "youtube", "linkedin", "tiktok", "x", "email"];
+
+// `facebook` is the client's Facebook Page, for the Instagram that rides on it: asked only to
+// post there, access to the Page is all the access there is to give.
+const accountItem = (id: string, name: string, account: OnboardingAccount = {}, facebook?: OnboardingAccount): Item => {
+  const viaFacebook = id === "instagram" && account.access === "invite";
   const standing: Standing =
     account.has === "yes"
-      ? account.access === "invite"
-        ? inviting(account)
-        : account.access === "secure"
-          ? ["Send a secure link for the login", "followup"]
-          : ["Access not chosen yet", "waiting"]
+      ? viaFacebook
+        ? facebook?.accessGiven
+          ? ["Through their Facebook Page", "ready"]
+          : ["Waiting on access to their Facebook Page", "waiting"]
+        : account.access === "invite"
+          ? inviting(account)
+          : account.access === "secure"
+            ? account.loginUsername && account.loginPassword
+              ? ["Login shared", "ready"]
+              : LOGIN_ACCOUNTS.includes(id)
+                ? ["Waiting for the login", "waiting"]
+                : ["Send a secure link for the login", "followup"]
+            : ["Access not chosen yet", "waiting"]
       : account.has === "no"
         ? wanted(account.wantsCreated, "Create the account")
         : account.has === "unsure"
@@ -454,7 +473,20 @@ const accountItem = (id: string, name: string, account: OnboardingAccount = {}):
     details: [
       ["Has an account", having(account.has)],
       ["Link or name", written(account.link)],
-      ["How they give access", account.access === "invite" ? "Inviting our access email" : account.access === "secure" ? "Sharing the login securely" : NONE],
+      // Only asked of Instagram.
+      ...(id === "instagram" ? ([["Already connected to their Facebook Page", ticked(account.connected)]] as Item["details"]) : []),
+      [
+        "How they give access",
+        viaFacebook
+          ? "Through their Facebook Page (posting only)"
+          : account.access === "invite"
+            ? id === "facebook"
+              ? "Adding our Facebook profile to their Page"
+              : "Inviting our access email"
+            : account.access === "secure"
+              ? "Sharing the login"
+              : NONE,
+      ],
       ["Login username", written(account.loginUsername)],
       // The password itself is sealed and isn't shown; this says whether one was given.
       ["Login password", account.loginPassword ? "Saved (encrypted)" : NONE],
@@ -505,6 +537,7 @@ const SOCIAL_NAMES: Record<OnboardingSocialAccount, string> = {
   linkedin: "LinkedIn Company Page",
   tiktok: "TikTok",
   x: "X (Twitter)",
+  email: "Email",
 };
 const MEDIA_NAMES: Record<OnboardingMediaKind, string> = {
   professionalPhotos: "Professional photos",
@@ -526,7 +559,7 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
     ? NOT_ANSWERED
     : cms.platform === NOT_SURE
       ? ["Help them find it", "followup"]
-      : cms.developer
+      : cms.developer || cms.platform === BUILT_BY_DEVELOPER
         ? ["Contact their developer for access", "followup"]
         : inviting(cms);
 
@@ -548,6 +581,7 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
   // One group for each step of the form, under the step's own name.
   return [
     {
+      id: "web",
       title: "Website",
       items: [
         item("website", "Website", websiteStanding, [
@@ -561,6 +595,7 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
       ],
     },
     {
+      id: "domain",
       title: "Domain and hosting",
       items: [
         item("domain", "Domain name", platformStanding(domain, "Register a domain"), [
@@ -577,10 +612,12 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
           ...accessFields(hosting),
           ["Wants us to set it up", yesNo(hosting.wantsCreated)],
         ]),
-        item("cms", "Website login (CMS)", cmsStanding, [["Built with", written(cms.platform)], ["Developer", written(cms.developer)], ...accessFields(cms)]),
+        // Without a website there is no login to it: the client's form doesn't ask either.
+        ...(website.hasNone ? [] : [item("cms", "Website login (CMS)", cmsStanding, [["Built with", written(cms.platform)], ["Developer", written(cms.developer)], ...accessFields(cms)])]),
       ],
     },
     {
+      id: "email",
       title: "Business email",
       items: [
         item("email", "Business email", emailStanding, [
@@ -593,6 +630,7 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
       ],
     },
     {
+      id: "logo",
       title: "Logo",
       items: [
         item("logo", "Logo", logoStanding, [
@@ -601,12 +639,13 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
           ["Logo files", written(logo.link)],
           ["Wants us to design one", yesNo(logo.wantsCreated)],
           ["Style they'd like", written(logo.style)],
+          ["Attached to the style", logo.styleFiles?.length ? `${logo.styleFiles.length} file${logo.styleFiles.length === 1 ? "" : "s"}` : NONE],
         ]),
       ],
     },
-    { title: "Google accounts", items: namesOf(GOOGLE_NAMES).map(([key, name]) => accountItem(key, name, onboarding.google?.[key])) },
-    { title: "Social media", items: namesOf(SOCIAL_NAMES).map(([key, name]) => accountItem(key, name, onboarding.social?.[key])) },
-    { title: "Photos and videos", items: namesOf(MEDIA_NAMES).map(([key, name]) => mediaItem(key, name, onboarding.media?.[key])) },
+    { id: "google", title: "Google accounts", items: namesOf(GOOGLE_NAMES).map(([key, name]) => accountItem(key, name, onboarding.google?.[key])) },
+    { id: "social", title: "Social media", items: namesOf(SOCIAL_NAMES).map(([key, name]) => accountItem(key, name, onboarding.social?.[key], onboarding.social?.facebook)) },
+    { id: "media", title: "Photos and videos", items: namesOf(MEDIA_NAMES).map(([key, name]) => mediaItem(key, name, onboarding.media?.[key])) },
   ];
 };
 
@@ -615,6 +654,7 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
 export const uploadsOf = (onboarding?: OnboardingAnswers): { title: string; files: OnboardingFile[] }[] =>
   [
     { title: "Logo", files: onboarding?.logo?.files ?? [] },
+    { title: "Logo style references", files: onboarding?.logo?.styleFiles ?? [] },
     ...namesOf(MEDIA_NAMES).map(([key, title]) => ({ title, files: onboarding?.media?.[key]?.files ?? [] })),
   ].filter((group) => group.files.length);
 

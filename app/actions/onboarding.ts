@@ -40,6 +40,8 @@ export interface OnboardingAccount {
   needsHelp?: boolean;
   // They don't have one: should we create it?
   wantsCreated?: boolean;
+  // Instagram: it is already connected to their Facebook Page.
+  connected?: boolean;
   // The account's own login, when that is how we get in. The password is kept sealed and is
   // never shown: here it only says that there is one.
   loginUsername?: string;
@@ -58,7 +60,7 @@ export interface OnboardingMedia {
 }
 
 export type OnboardingGoogleAccount = "businessProfile" | "analytics" | "searchConsole" | "tagManager" | "ads";
-export type OnboardingSocialAccount = "facebook" | "instagram" | "youtube" | "linkedin" | "tiktok" | "x";
+export type OnboardingSocialAccount = "facebook" | "instagram" | "youtube" | "linkedin" | "tiktok" | "x" | "email";
 export type OnboardingMediaKind = "professionalPhotos" | "businessPhotos" | "videos";
 
 // Every answer is optional — a missing one means the client didn't answer it.
@@ -71,6 +73,10 @@ export interface OnboardingTarget {
 export interface OnboardingAnswers {
   status: OnboardingStatus;
   submittedAt?: string;
+  // The team's own ticks over the form (see OnboardingControls): what this client isn't asked —
+  // steps ("step:google") and items ("social.facebook") — and the items that are approved.
+  notNeeded?: string[];
+  approved?: string[];
   // Asked in the steps a client goes through right after signing up (client-portal: ClientSignup).
   business?: {
     description?: string;
@@ -107,7 +113,7 @@ export interface OnboardingAnswers {
   // Their business email — not the contact's own email.
   email?: { has?: OnboardingYesNo; provider?: string; wantsCreated?: boolean; accounts?: number; addresses?: string };
   // `files` are what the client uploaded; `link` is a shared folder instead of, or with, them.
-  logo?: { has?: OnboardingYesNo; link?: string; files?: OnboardingFile[]; wantsCreated?: boolean; style?: string };
+  logo?: { has?: OnboardingYesNo; link?: string; files?: OnboardingFile[]; wantsCreated?: boolean; style?: string; styleFiles?: OnboardingFile[] };
   google?: Partial<Record<OnboardingGoogleAccount, OnboardingAccount>>;
   // `metaAds` (the ad account behind Facebook and Instagram ads) is asked about at sign-up only.
   social?: Partial<Record<OnboardingSocialAccount, OnboardingAccount>> & { metaAds?: OnboardingAccount };

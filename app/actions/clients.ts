@@ -147,6 +147,8 @@ export interface ClientInput {
   portalMenus?: string[];
   details?: ClientProfile;
   shared?: ClientShared;
+  // The ticks over the client's onboarding form: what they aren't asked, and what is approved.
+  onboardingControls?: { notNeeded: string[]; approved: string[] };
   accountManager?: string | null;
   team?: string[];
 }

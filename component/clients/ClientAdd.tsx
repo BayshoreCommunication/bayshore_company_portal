@@ -13,7 +13,6 @@ import {
   BILLING_DAYS,
   BUSINESS_TYPES,
   CANCELLATION_NOTICES,
-  CLIENT_HAS,
   CLIENT_NEEDS,
   COMMUNICATION_METHODS,
   CONTRACT_TERMS,
@@ -49,6 +48,7 @@ import {
   todayInputValue,
   uploadsOf,
 } from "./clientUi";
+import OnboardingControls, { DEFAULT_NOT_NEEDED, tickedIn, ticksOf } from "./OnboardingControls";
 
 // The form a client is added with — and edited with: five parts (who they are, their
 // business, what they are buying, what is being taken over from them, and their contract and
@@ -259,30 +259,6 @@ const Radios = ({ name, value, onChange, options }: { name: string; value: strin
   </div>
 );
 
-// A list to tick off as a transfer goes on, with how far along it is.
-const Checklist = ({ title, items, ticked, onToggle }: { title: string; items: string[]; ticked: boolean[]; onToggle: (index: number) => void }) => {
-  const done = ticked.filter(Boolean).length;
-  return (
-    <div className={`${listClass} mb-4`}>
-      <div className="mb-2.5 flex items-center justify-between gap-3">
-        <h3 className="text-[16px] font-bold">{title}</h3>
-        <span className="rounded-full bg-[#e8effd] px-2.5 py-1 text-[12px] font-semibold whitespace-nowrap text-[#2563eb]">
-          {done} / {items.length}
-        </span>
-      </div>
-      <div className="mb-3 h-1.5 overflow-hidden rounded-full bg-[#eef0f3]">
-        <i className="block h-full bg-[#16a34a] transition-[width] duration-200" style={{ width: `${(done / items.length) * 100}%` }} />
-      </div>
-      {items.map((item, index) => (
-        <label key={item} className="flex cursor-pointer items-center gap-2.5 py-[7px] text-[14px]">
-          <input type="checkbox" checked={Boolean(ticked[index])} onChange={() => onToggle(index)} className="size-[17px] flex-none accent-[#16a34a]" />
-          <span className={ticked[index] ? "text-[#6b7280] line-through" : "text-[#111827]"}>{item}</span>
-        </label>
-      ))}
-    </div>
-  );
-};
-
 // ── What the form holds ──────────────────────────────────────────────────────
 
 // The plain answers: typed, or picked from a list.
@@ -391,7 +367,7 @@ const hasFrom = (client?: Client): string[] | undefined => {
     ["social", [said.social?.facebook, said.social?.instagram, said.social?.youtube, said.social?.linkedin, said.social?.tiktok, said.social?.x].some(yes)],
     ["analytics", yes(said.google?.analytics) || yes(said.google?.searchConsole)],
     ["ads", yes(said.google?.ads) || yes(said.social?.metaAds)],
-    ["media", uploadsOf(said).some((group) => group.title !== "Logo")],
+    ["media", uploadsOf(said).some((group) => !group.title.startsWith("Logo"))],
   ];
   return list.filter(([, has]) => has).map(([key]) => key);
 };
@@ -506,22 +482,21 @@ export const ClientForm = ({ client, staff = [] }: { client?: Client; staff?: St
   const changeService = (index: number, change: (state: ServiceState) => ServiceState) => setServices((now) => now.map((state, at) => (at === index ? change(state) : state)));
 
   // ── Step 4: what they have, what they need, and what is being handed over ──
+  // The step itself is now the onboarding controls (OnboardingControls.tsx): which steps and
+  // items of the onboarding form this client needs — the rest are left off their form — and
+  // which the account manager has approved.
+  const [notNeeded, setNotNeeded] = useState(() => ticksOf(client?.onboarding?.notNeeded ?? DEFAULT_NOT_NEEDED));
+  const [approved, setApproved] = useState(() => ticksOf(client?.onboarding?.approved));
+  // These are no longer asked on the form: they are held as they were saved — but for the
+  // logo, which step 2 still decides — so that saving the client doesn't lose them.
   const [has, setHas] = useState<string[]>(() => saved?.transfer?.has ?? hasFrom(client) ?? ["logo"]);
   const [needs, setNeeds] = useState(() => {
     const ticked = saved?.transfer?.needs ?? [];
     // The ones on the list, then any that were added for this client.
     return [...CLIENT_NEEDS.map((text) => ({ text, on: ticked.includes(text) })), ...ticked.filter((text) => !CLIENT_NEEDS.includes(text)).map((text) => ({ text, on: true }))];
   });
-  const [needDraft, setNeedDraft] = useState("");
-  const addNeed = () => {
-    const text = needDraft.trim();
-    if (!text) return;
-    setNeeds((now) => (now.some((need) => need.text === text) ? now : [...now, { text, on: true }]));
-    setNeedDraft("");
-  };
-  const [websiteTicks, setWebsiteTicks] = useState<boolean[]>(() => WEBSITE_TRANSFER.map((item) => Boolean(saved?.transfer?.websiteDone?.includes(item))));
-  const [socialTicks, setSocialTicks] = useState<boolean[]>(() => SOCIAL_TRANSFER.map((item) => Boolean(saved?.transfer?.socialDone?.includes(item))));
-  const toggleAt = (index: number) => (ticks: boolean[]) => Array.from({ length: Math.max(ticks.length, index + 1) }, (_, at) => (at === index ? !ticks[at] : Boolean(ticks[at])));
+  const [websiteTicks] = useState<boolean[]>(() => WEBSITE_TRANSFER.map((item) => Boolean(saved?.transfer?.websiteDone?.includes(item))));
+  const [socialTicks] = useState<boolean[]>(() => SOCIAL_TRANSFER.map((item) => Boolean(saved?.transfer?.socialDone?.includes(item))));
 
   // Having a logo, or needing one designed, shows in both places.
   const syncLogo = (answer: "yes" | "no", add: boolean) => {
@@ -657,7 +632,8 @@ export const ClientForm = ({ client, staff = [] }: { client?: Client; staff?: St
 
     // In the menu's own order, whatever order they were ticked in.
     const portalMenus = PORTAL_MENUS.map(([key]) => key).filter((key) => menus.includes(key));
-    const input = { contactName, companyName, email, phone, address, serviceTypes, startDate, status, notes, portalMenus, details, shared, accountManager: answers.accountManager || null };
+    const onboardingControls = { notNeeded: tickedIn(notNeeded), approved: tickedIn(approved) };
+    const input = { contactName, companyName, email, phone, address, serviceTypes, startDate, status, notes, portalMenus, details, shared, onboardingControls, accountManager: answers.accountManager || null };
 
     startTransition(async () => {
       // A new client only gets a login when one was asked for.
@@ -951,65 +927,9 @@ export const ClientForm = ({ client, staff = [] }: { client?: Client; staff?: St
             icon="checklist"
             step={4}
             title="Onboarding and transfer"
-            sub="First record what the client already has and what they need, then track the transfer of anything we're taking over."
+            sub="What this client's onboarding asks for, what they have given us, and what the account manager has approved."
           >
-            <div className="mb-4 grid grid-cols-2 gap-4 max-[640px]:grid-cols-1">
-              <div className={listClass}>
-                <h3 className="mb-2.5 text-[16px] font-bold">What the client has</h3>
-                {CLIENT_HAS.map(([value, label]) => (
-                  <label key={value} className={tickClass}>
-                    <input
-                      type="checkbox"
-                      checked={has.includes(value)}
-                      onChange={(event) => setHas((now) => (event.target.checked ? [...now, value] : now.filter((item) => item !== value)))}
-                      className={checkboxClass}
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-              <div className={listClass}>
-                <h3 className="mb-2.5 text-[16px] font-bold">What the client needs</h3>
-                {needs.map((need, index) => (
-                  <label key={need.text} className={tickClass}>
-                    <input
-                      type="checkbox"
-                      checked={need.on}
-                      onChange={(event) => setNeeds((now) => now.map((old, at) => (at === index ? { ...old, on: event.target.checked } : old)))}
-                      className={checkboxClass}
-                    />
-                    {need.text}
-                  </label>
-                ))}
-                <div className="mt-2 flex gap-2">
-                  <input
-                    className={`${smallInputClass} py-2 text-[14px]`}
-                    placeholder="Something else they need"
-                    aria-label="Something else they need"
-                    value={needDraft}
-                    onChange={(event) => setNeedDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key !== "Enter") return;
-                      event.preventDefault();
-                      addNeed();
-                    }}
-                  />
-                  <button type="button" className={addButtonClass} onClick={addNeed}>
-                    Add
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <h3 className={subheadClass}>Transfer checklists</h3>
-            {hasWebsite || hasSocial ? null : (
-              <div className="mb-4 rounded-xl border border-dashed border-[#e3e5e8] p-3.5 text-[14px] text-[#6b7280]">
-                Tick &quot;Website&quot; or &quot;Social media accounts&quot; above to show the transfer checklists.
-              </div>
-            )}
-            {hasWebsite ? <Checklist title="Website transfer checklist" items={WEBSITE_TRANSFER} ticked={websiteTicks} onToggle={(index) => setWebsiteTicks(toggleAt(index))} /> : null}
-            {hasSocial ? <Checklist title="Social media transfer checklist" items={SOCIAL_TRANSFER} ticked={socialTicks} onToggle={(index) => setSocialTicks(toggleAt(index))} /> : null}
-            <div className={hintClass}>Your team can keep updating these from the client&apos;s profile.</div>
+            <OnboardingControls client={client} about={{ contactName, companyName, email, phone }} off={notNeeded} setOff={setNotNeeded} approved={approved} setApproved={setApproved} />
           </Section>
 
           {/* 5. Account setup */}
@@ -1308,7 +1228,7 @@ export const ClientForm = ({ client, staff = [] }: { client?: Client; staff?: St
           )}
           <div className={`${sideCardClass} border-[#cfeedb] bg-[#f0fbf3]`}>
             <h4 className="mb-1.5 text-[14.5px] font-bold text-[#0f172a]">💡 Tip</h4>
-            <p className="text-[13px] leading-normal text-[#4b5563]">Collect the client&apos;s logins and access details on the onboarding call so the transfer checklists can be completed right away.</p>
+            <p className="text-[13px] leading-normal text-[#4b5563]">Collect the client&apos;s logins and access details on the onboarding call so each onboarding item can be approved right away.</p>
           </div>
           <div className={`${sideCardClass} border-[#e3e8e5] bg-white`}>
             <h4 className="mb-1.5 text-[14.5px] font-bold text-[#0f172a]">Need help?</h4>
