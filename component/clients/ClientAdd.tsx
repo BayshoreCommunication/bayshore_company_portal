@@ -526,7 +526,8 @@ export const ClientForm = ({ client, staff = [] }: { client?: Client; staff?: St
   const [contractFile, setContractFile] = useState("");
   const [payOnFile, setPayOnFile] = useState(saved?.billing?.paymentOnFile ? "yes" : "no");
   const [status, setStatus] = useState<ClientStatus>(client?.status ?? "pending");
-  const [portal, setPortalAnswer] = useState(false);
+  // A typed password creates the client's portal login, or replaces an existing client's
+  // password; left blank, nothing about the login changes.
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -536,14 +537,9 @@ export const ClientForm = ({ client, staff = [] }: { client?: Client; staff?: St
   // client who signed up themselves and hasn't been given more, only the first ones.
   const [menus, setMenus] = useState<string[]>(() => (client ? portalMenusOf(client) : undefined) ?? PORTAL_MENUS.map(([key]) => key));
 
-  // Without a login there is no portal to read reports in.
-  const setPortal = (on: boolean) => {
-    setPortalAnswer(on);
-    if (on) return;
-    setPassword("");
-    setConfirmPassword("");
-    setAnswers((now) => (now.delivery === DELIVERY_PORTAL ? { ...now, delivery: REPORT_DELIVERIES[0] } : now));
-  };
+  const changePassword = password !== "";
+  // The client has (or will have) a portal login.
+  const portal = Boolean(client?.user) || changePassword;
 
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
@@ -572,7 +568,7 @@ export const ClientForm = ({ client, staff = [] }: { client?: Client; staff?: St
     const serviceTypes = [...SERVICES.filter((_, index) => services[index].on).map((service) => service.name), ...otherServices];
     if (methods.length === 0) return refuse("Select at least one way to communicate with the client.");
     if (serviceTypes.length === 0) return refuse("Select at least one service.");
-    if (!client && portal && password !== confirmPassword) return refuse("Passwords do not match.");
+    if (changePassword && password !== confirmPassword) return refuse("Passwords do not match.");
 
     // Everything the form asks beyond the contact details, as the client's record keeps it.
     const details: ClientProfile = {
@@ -636,8 +632,11 @@ export const ClientForm = ({ client, staff = [] }: { client?: Client; staff?: St
     const input = { contactName, companyName, email, phone, address, serviceTypes, startDate, status, notes, portalMenus, details, shared, onboardingControls, accountManager: answers.accountManager || null };
 
     startTransition(async () => {
-      // A new client only gets a login when one was asked for.
-      const result = client ? await updateClientAction(client._id, input) : await createClientAction({ ...input, ...(portal ? { password } : {}) });
+      // A new client gets a login when requested; an existing client gets one only when the
+      // team has chosen to set or replace its password.
+      const result = client
+        ? await updateClientAction(client._id, { ...input, ...(changePassword ? { password } : {}) })
+        : await createClientAction({ ...input, ...(changePassword ? { password } : {}) });
 
       if (!result.ok) {
         setError(result.error ?? "Something went wrong.");
@@ -1055,82 +1054,55 @@ export const ClientForm = ({ client, staff = [] }: { client?: Client; staff?: St
               <Select id={`${id}-delivery`} value={answers.delivery} onChange={put("delivery")} options={REPORT_DELIVERIES} disabled={portal || isEdit ? [] : [DELIVERY_PORTAL]} />
             </Field>
 
-            {/* The login is made with the client; afterwards it is managed from their profile. */}
-            {isEdit ? null : (
-              <>
-                <div className="mb-5 flex items-start gap-3.5 rounded-xl border border-[#e3e5e8] bg-[#fcfcfd] p-4">
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={portal}
-                    aria-labelledby={`${id}-portal-label`}
-                    onClick={() => setPortal(!portal)}
-                    className={`relative h-6 w-[42px] flex-none cursor-pointer rounded-full transition-colors duration-200 ${portal ? "bg-[#2563eb]" : "bg-[#d1d5db]"}`}
-                  >
-                    <span className={`absolute top-[3px] left-[3px] size-[18px] rounded-full bg-white transition-transform duration-200 ${portal ? "translate-x-[18px]" : ""}`} />
+            {/* The portal password: always shown. On a new client it creates their login (blank = no login);
+                on an existing one it sets or replaces it (blank = keep the current one). */}
+            <div className={rowClass}>
+              <Field
+                label="Portal password"
+                htmlFor={`${id}-password`}
+                hint={client?.user ? "Leave blank to keep their current password. At least 8 characters." : "At least 8 characters. Leave blank if the client doesn't need a portal login."}
+              >
+                <div className="relative">
+                  <input
+                    id={`${id}-password`}
+                    type={showPassword ? "text" : "password"}
+                    className={`${inputClass} pr-16`}
+                    minLength={8}
+                    maxLength={72}
+                    autoComplete="new-password"
+                    placeholder={client?.user ? "Enter a new password" : "Enter a password"}
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                  />
+                  <button type="button" onClick={() => setShowPassword((shown) => !shown)} aria-pressed={showPassword} className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-[13px] text-[#6b7280] hover:text-[#111827]">
+                    {showPassword ? "Hide" : "Show"}
                   </button>
-                  <div>
-                    <strong id={`${id}-portal-label`} className="font-bold">
-                      Give this client a portal login
-                    </strong>
-                    <div className="mt-0.5 text-[13px] text-[#6b7280]">
-                      Leave this off if the client doesn&apos;t want an account. Our team will manage everything and send updates by email. You can turn it on later.
-                    </div>
-                  </div>
                 </div>
-                {portal ? (
-                  <div className={rowClass}>
-                    <Field label="Portal password" htmlFor={`${id}-password`} required hint="At least 8 characters. Share this with the client so they can sign in.">
-                      <div className="relative">
-                        <input
-                          id={`${id}-password`}
-                          type={showPassword ? "text" : "password"}
-                          className={`${inputClass} pr-16`}
-                          required
-                          minLength={8}
-                          maxLength={72}
-                          autoComplete="new-password"
-                          placeholder="Enter a password"
-                          value={password}
-                          onChange={(event) => setPassword(event.target.value)}
-                        />
-                        <button type="button" onClick={() => setShowPassword((shown) => !shown)} aria-pressed={showPassword} className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-[13px] text-[#6b7280] hover:text-[#111827]">
-                          {showPassword ? "Hide" : "Show"}
-                        </button>
-                      </div>
-                    </Field>
-                    <Field
-                      label="Confirm password"
-                      htmlFor={`${id}-confirm`}
-                      required
-                      hint={<span className={passwordsMatch ? "text-[#16a34a]" : passwordsMismatch ? "text-[#dc2626]" : ""}>{passwordsMatch ? "Passwords match." : passwordsMismatch ? "Passwords don't match." : "Type the same password again."}</span>}
-                    >
-                      <div className="relative">
-                        <input
-                          id={`${id}-confirm`}
-                          type={showConfirmPassword ? "text" : "password"}
-                          className={`${inputClass} pr-16`}
-                          required
-                          autoComplete="new-password"
-                          placeholder="Re-enter the password"
-                          aria-invalid={passwordsMismatch}
-                          value={confirmPassword}
-                          onChange={(event) => setConfirmPassword(event.target.value)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPassword((shown) => !shown)}
-                          aria-pressed={showConfirmPassword}
-                          className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-[13px] text-[#6b7280] hover:text-[#111827]"
-                        >
-                          {showConfirmPassword ? "Hide" : "Show"}
-                        </button>
-                      </div>
-                    </Field>
-                  </div>
-                ) : null}
-              </>
-            )}
+              </Field>
+              <Field
+                label="Confirm password"
+                htmlFor={`${id}-confirm`}
+                required={password !== ""}
+                hint={<span className={passwordsMatch ? "text-[#16a34a]" : passwordsMismatch ? "text-[#dc2626]" : ""}>{passwordsMatch ? "Passwords match." : passwordsMismatch ? "Passwords don't match." : "Type the same password again."}</span>}
+              >
+                <div className="relative">
+                  <input
+                    id={`${id}-confirm`}
+                    type={showConfirmPassword ? "text" : "password"}
+                    className={`${inputClass} pr-16`}
+                    required={password !== ""}
+                    autoComplete="new-password"
+                    placeholder="Re-enter the password"
+                    aria-invalid={passwordsMismatch}
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                  />
+                  <button type="button" onClick={() => setShowConfirmPassword((shown) => !shown)} aria-pressed={showConfirmPassword} className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-[13px] text-[#6b7280] hover:text-[#111827]">
+                    {showConfirmPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </Field>
+            </div>
 
             {/* Which pages of the portal the client's menu has. Only worth asking once they have a login. */}
             {isEdit || portal ? (

@@ -304,7 +304,7 @@ export async function createClientAction(
 
 export async function updateClientAction(
   id: string,
-  input: Partial<ClientInput>,
+  input: Partial<ClientInput> & { password?: string },
 ): Promise<ClientActionResult<Client>> {
   const accessToken = await token();
   if (!accessToken) return { ok: false, error: "Not authenticated." };

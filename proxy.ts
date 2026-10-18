@@ -170,7 +170,8 @@ export default async function proxy(req: NextRequest) {
     }
 
     const signInUrl = new URL("/sign-in", req.nextUrl);
-    signInUrl.searchParams.set("callbackUrl", pathname);
+    // The root has no page of its own, so there is nothing to come back to after signing in.
+    if (pathname !== "/") signInUrl.searchParams.set("callbackUrl", pathname);
     const response = NextResponse.redirect(signInUrl);
     if (token) response.cookies.delete(cookieName);
     return response;
@@ -191,7 +192,8 @@ export default async function proxy(req: NextRequest) {
     return response;
   };
 
-  if (isAuthRoute) {
+  // Signed in, the root and the sign-in pages lead to the dashboard.
+  if (isAuthRoute || pathname === "/") {
     return persistCookie(NextResponse.redirect(new URL("/dashboard", req.nextUrl)));
   }
 
