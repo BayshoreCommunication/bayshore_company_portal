@@ -448,13 +448,14 @@ const subscribeNever = () => () => {};
 const number = (value: string) => parseFloat(value) || 0;
 
 // Pass `client` to edit an existing one; leave it out to add a new one. `staff` are the team
-// members an account manager can be picked from.
-export const ClientForm = ({ client, staff = [] }: { client?: Client; staff?: StaffOption[] }) => {
+// members an account manager can be picked from. `backHref` is where Cancel goes, when not the
+// client's own page (or the list, for a new one).
+export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { client?: Client; staff?: StaffOption[]; backHref?: string }) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const id = useId();
   const isEdit = Boolean(client);
-  const backHref = client ? `/clients/${client._id}` : "/clients";
+  const backHref = cancelHref ?? (client ? `/clients/${client._id}` : "/clients");
   const saved = client?.details;
 
   // ── Step 1: who they are ──

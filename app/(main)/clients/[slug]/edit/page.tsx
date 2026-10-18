@@ -5,8 +5,10 @@ import ClientEdit from "@/component/clients/ClientEdit";
 import { canManageClients } from "@/component/clients/clientUi";
 import { formErrorBanner } from "@/component/shared/ui";
 
-const EditClientPage = async ({ params }: { params: Promise<{ slug: string }> }) => {
-  const { slug } = await params;
+// Opened from a card on the clients list (?from=list), Cancel goes back to the list; otherwise
+// to the client's own page.
+const EditClientPage = async ({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ from?: string }> }) => {
+  const [{ slug }, { from }] = await Promise.all([params, searchParams]);
   const [session, result, staff] = await Promise.all([auth(), getClientAction(slug), listStaffAction()]);
 
   if (!canManageClients(session?.user?.role)) redirect(`/clients/${slug}`);
@@ -20,7 +22,7 @@ const EditClientPage = async ({ params }: { params: Promise<{ slug: string }> })
     );
   }
 
-  return <ClientEdit client={result.data} staff={staff} />;
+  return <ClientEdit client={result.data} staff={staff} backHref={from === "list" ? "/clients" : undefined} />;
 };
 
 export default EditClientPage;

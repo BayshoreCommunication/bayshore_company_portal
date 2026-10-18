@@ -125,7 +125,7 @@ const Card = ({ client, canManage }: { client: Client; canManage: boolean }) => 
           <Eye size={13} strokeWidth={2.5} /> View client
         </Link>
         {canManage ? (
-          <Link href={`/clients/${client._id}/edit`} className={`${cardButton} border border-[#dbe3de] bg-white text-[#17242f] hover:border-[#2563eb] hover:text-[#2563eb]`}>
+          <Link href={`/clients/${client._id}/edit?from=list`} className={`${cardButton} border border-[#dbe3de] bg-white text-[#17242f] hover:border-[#2563eb] hover:text-[#2563eb]`}>
             <Pencil size={12} strokeWidth={2.5} /> Edit client
           </Link>
         ) : null}
