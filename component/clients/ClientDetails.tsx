@@ -952,6 +952,65 @@ const ClientDetails = ({
 
 // ── An onboarding request's page ─────────────────────────────────────────────
 
+// The "About them" tab: who they are, then everything they said about their business and their
+// goals — on the onboarding form's first step, and in the steps right after signing up — and
+// whether they booked the kickoff call. A field they left empty shows as "None".
+const AboutThem = ({ request }: { request: OnboardingRequest }) => {
+  const { business, goals, kickoffCall } = request.onboarding;
+  const metaAds = request.onboarding.social?.metaAds;
+  const or =(value: string | undefined) => (value?.trim() ? value : NONE);
+  const head = "mt-5 mb-2.5 border-t border-[#eef3ef] pt-4 text-[12px] font-bold tracking-[0.04em] text-[#17242f] uppercase";
+  return (
+    <>
+      <Fields
+        rows={[
+          ["Name", or(request.contactName)],
+          ["Company", or(request.companyName)],
+          ["Email", or(request.email)],
+          ["Phone", or(request.phone)],
+        ]}
+      />
+      <div className={head}>Their business</div>
+      <Fields
+        rows={[
+          ["About the business", or(business?.description)],
+          ["Services they offer", or(business?.services?.join(", "))],
+          ["Areas they serve", or(business?.areas?.join(", "))],
+          ["Main contact", or([business?.contact?.name, business?.contact?.email, business?.contact?.phone].filter(Boolean).join(" · "))],
+          ["Best way to reach them", or(REACH_BY[business?.contact?.reachBy ?? ""])],
+        ]}
+      />
+      <div className={head}>Goals</div>
+      <Fields
+        rows={[
+          ["Revenue per month", or(targetOf(goals?.revenue, money))],
+          ["Leads per month", or(targetOf(goals?.leads, String))],
+          ["New clients per month", or(targetOf(goals?.newClients, String))],
+          ["How soon", or(GOAL_TIMEFRAMES[goals?.timeframe ?? ""])],
+          ["Monthly marketing budget", or(GOAL_BUDGETS[goals?.budget ?? ""])],
+          ["Cost of one lead today", goals?.costPerLead === undefined ? NONE : money(goals.costPerLead)],
+          ["Worth of one new client", goals?.clientValue === undefined ? NONE : money(goals.clientValue)],
+          ["Where leads come from", or(goals?.leadSources?.map((source) => LEAD_SOURCES[source] ?? source).join(", "))],
+        ]}
+      />
+      <div className={head}>Also asked at sign-up</div>
+      <Fields
+        rows={[
+          ["Kickoff call booked", kickoffCall ? (kickoffCall.booked ? "Yes (the client says so)" : "Not yet") : NONE],
+          [
+            "Meta Ads account",
+            metaAds?.has
+              ? [metaAds.has === "yes" ? "Has one" : metaAds.wantsCreated ? "Wants us to create it" : metaAds.has === "unsure" ? "Not sure" : "Doesn't have one", metaAds.link]
+                  .filter(Boolean)
+                  .join(" — ")
+              : NONE,
+          ],
+        ]}
+      />
+    </>
+  );
+};
+
 // An onboarding request in full: who sent it, how much they answered, and then a tab for
 // each step of the form — where each thing stands for the team, and every field with what the
 // client put in it. A field they left empty still shows, as "None".
@@ -1044,16 +1103,7 @@ export const OnboardingRequestDetails = ({ request, canOpenClient }: { request: 
         onboarding={onboarding}
         first={{
           title: "About them",
-          content: (
-            <Fields
-              rows={[
-                ["Name", request.contactName || NONE],
-                ["Company", request.companyName || NONE],
-                ["Email", request.email || NONE],
-                ["Phone", request.phone || NONE],
-              ]}
-            />
-          ),
+          content: <AboutThem request={request} />,
         }}
       />
     </>

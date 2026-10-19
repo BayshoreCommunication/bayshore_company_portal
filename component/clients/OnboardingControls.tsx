@@ -2,7 +2,7 @@
 
 import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import type { Client } from "@/app/actions/clients";
-import { NONE, groupsOf, isAnswered, linkOf, type Item } from "./clientUi";
+import { GOAL_BUDGETS, GOAL_TIMEFRAMES, LEAD_SOURCES, NONE, REACH_BY, groupsOf, isAnswered, linkOf, money, targetOf, type Item } from "./clientUi";
 
 // Step 4 of the client form: the client's onboarding as the account manager works through it.
 // Two views of the same steps and items. "Onboarding controls" says which of them this client
@@ -71,23 +71,49 @@ const entryOf = (step: string, item: Item): Entry => {
 // Who the client is — the first step, from what the form above holds.
 type About = { contactName: string; companyName: string; email: string; phone: string };
 
-const aboutStep = (about: About): Step => {
+const aboutStep = (about: About, onboarding?: Client["onboarding"]): Step => {
   const rows = (pairs: [string, string | undefined][]): Item["details"] => pairs.flatMap(([label, value]) => (value?.trim() ? [[label, value.trim()] as [string, string]] : []));
   const entry = (id: string, name: string, details: Item["details"], needed: string): Entry =>
     needed.trim()
       ? { id, name, answer: "Submitted", st: "filled", kind: "details", details }
       : { id, name, answer: "No answer yet", st: "wait", kind: "empty", details };
-  // One item, as on the client's own form: who is answering.
+  const { business, goals, kickoffCall } = onboarding ?? {};
+  // One item, as on the client's own form: who is answering — with what they said there, and
+  // right after signing up, about their business and their goals.
   return {
     id: "step:contact",
     title: "About you",
     locked: true,
-    items: [entry("contact", "Your details", rows([["Name", about.contactName], ["Company", about.companyName], ["Email", about.email], ["Phone", about.phone]]), about.contactName && about.companyName && about.email)],
+    items: [
+      entry(
+        "contact",
+        "Your details",
+        rows([
+          ["Name", about.contactName],
+          ["Company", about.companyName],
+          ["Email", about.email],
+          ["Phone", about.phone],
+          ["About the business", business?.description],
+          ["Services they offer", business?.services?.join(", ")],
+          ["Areas they serve", business?.areas?.join(", ")],
+          ["Main contact", [business?.contact?.name, business?.contact?.email, business?.contact?.phone].filter(Boolean).join(" · ")],
+          ["Best way to reach them", REACH_BY[business?.contact?.reachBy ?? ""]],
+          ["Revenue per month", targetOf(goals?.revenue, money)],
+          ["Leads per month", targetOf(goals?.leads, String)],
+          ["New clients per month", targetOf(goals?.newClients, String)],
+          ["How soon", GOAL_TIMEFRAMES[goals?.timeframe ?? ""]],
+          ["Monthly marketing budget", GOAL_BUDGETS[goals?.budget ?? ""]],
+          ["Where leads come from", goals?.leadSources?.map((source) => LEAD_SOURCES[source] ?? source).join(", ")],
+          ["Kickoff call", kickoffCall ? (kickoffCall.booked ? "Booked (the client says so)" : "Not booked yet") : undefined],
+        ]),
+        about.contactName && about.companyName && about.email,
+      ),
+    ],
   };
 };
 
 const stepsOf = (about: About, client?: Client): Step[] => [
-  aboutStep(about),
+  aboutStep(about, client?.onboarding),
   ...groupsOf({ onboarding: client?.onboarding ?? { status: "in_progress" } }).map((group) => ({ id: `step:${group.id}`, title: group.title, items: group.items.map((item) => entryOf(group.id, item)) })),
 ];
 
