@@ -443,7 +443,7 @@ const ReportForm = ({
 
   const dates = periodDates(values.periodType, values.periodValue);
   const clientName = report ? clientNameOf(report.client) : clients.find((option) => option._id === values.clientId)?.companyName;
-  const preparedBy = report && typeof report.createdBy === "object" ? report.createdBy.fullName : userName;
+  const preparedBy = report?.createdBy && typeof report.createdBy === "object" ? report.createdBy.fullName : userName;
 
   // Save the form, then optionally move the report to another status.
   const save = (target?: ReportStatus) => {
@@ -871,13 +871,13 @@ const ReportForm = ({
                 {report.approvedAt ? (
                   <div>
                     Approved {formatDate(report.approvedAt)}
-                    {typeof report.approvedBy === "object" ? ` by ${report.approvedBy.fullName}` : ""}
+                    {report.approvedBy && typeof report.approvedBy === "object" ? ` by ${report.approvedBy.fullName}` : ""}
                   </div>
                 ) : null}
                 {report.publishedAt ? (
                   <div>
                     Published {formatDate(report.publishedAt)}
-                    {typeof report.publishedBy === "object" ? ` by ${report.publishedBy.fullName}` : ""}
+                    {report.publishedBy && typeof report.publishedBy === "object" ? ` by ${report.publishedBy.fullName}` : ""}
                   </div>
                 ) : null}
               </div>

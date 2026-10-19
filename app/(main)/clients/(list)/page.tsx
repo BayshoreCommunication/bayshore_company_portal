@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { listClientsAction, type ClientStatus } from "@/app/actions/clients";
+import { listClientsAction } from "@/app/actions/clients";
 import ClientList from "@/component/clients/ClientList";
 import { CLIENTS_PER_PAGE, canManageClients, clientsHref, isClientStatus } from "@/component/clients/clientUi";
 
@@ -16,15 +16,9 @@ const ClientsPage = async ({ searchParams }: { searchParams: SearchParams }) => 
   const search = first(params.q)?.trim() ?? "";
   const page = Math.max(1, Number(first(params.page)) || 1);
 
-  // With no tab asked for, the page opens on the clients who are onboarding — the new ones,
-  // who need looking at first — and on every client when nobody is.
-  let status: "all" | ClientStatus = chosen ?? "onboarding";
-  const [session, firstResult] = await Promise.all([auth(), listClientsAction({ page, limit: CLIENTS_PER_PAGE, status, search })]);
-  let result = firstResult;
-  if (!chosen && !result.data?.summary.onboarding) {
-    status = "all";
-    result = await listClientsAction({ page, limit: CLIENTS_PER_PAGE, status, search });
-  }
+  // Start with every client unless a specific status tab was requested in the URL.
+  const status = chosen ?? "all";
+  const [session, result] = await Promise.all([auth(), listClientsAction({ page, limit: CLIENTS_PER_PAGE, status, search })]);
   const canManage = canManageClients(session?.user?.role);
 
   // A stale or hand-edited ?page=99 lands on the last page that exists instead of an empty list.

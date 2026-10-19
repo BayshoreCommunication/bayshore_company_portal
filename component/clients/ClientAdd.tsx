@@ -5,6 +5,29 @@ import { Fraunces, Inter } from "next/font/google";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import {
+  ArrowLeft,
+  Bell,
+  BriefcaseBusiness,
+  Building2,
+  CalendarDays,
+  CreditCard,
+  DollarSign,
+  FileText,
+  Globe2,
+  Image,
+  Link2,
+  Mail,
+  MapPin,
+  MessageSquare,
+  Palette,
+  Phone,
+  ShieldCheck,
+  StickyNote,
+  User,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { createClientAction, updateClientAction, type Client, type ClientProfile, type ClientShared, type ClientStatus, type StaffOption } from "@/app/actions/clients";
 import { formErrorBanner } from "@/component/shared/ui";
 import {
@@ -32,19 +55,19 @@ import {
   SOCIAL_TRANSFER,
   TIME_ZONES,
   WEBSITE_TRANSFER,
-  GOAL_BUDGETS,
-  GOAL_TIMEFRAMES,
-  LEAD_SOURCES,
   NOTES_LIMIT,
   ONBOARDING_STATUS_LABELS,
   REACH_BY,
   contractEnd,
   countsOf,
+  avatarColorFor,
+  formatDate,
+  formatDateTime,
   groupsOf,
+  initialsOf,
   money,
   portalMenusOf,
   sharedOf,
-  targetOf,
   todayInputValue,
   uploadsOf,
 } from "./clientUi";
@@ -65,32 +88,32 @@ const fraunces = Fraunces({ subsets: ["latin"] });
 
 // ── Looks ────────────────────────────────────────────────────────────────────
 
-const cardClass = "mb-5 rounded-2xl border border-[#e3e8e5] bg-white p-7 shadow-[0_1px_2px_rgba(11,21,34,0.04)] max-[640px]:p-5";
-const rowClass = "grid grid-cols-2 gap-5 max-[640px]:grid-cols-1";
-const labelClass = "mb-1.5 block text-[13.5px] font-semibold text-[#374151]";
-const smallLabelClass = "mb-1.5 block text-[13px] font-medium text-[#374151]";
+const cardClass = "mb-5 overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white p-6 shadow-[0_5px_18px_rgba(15,23,42,0.035)] max-[640px]:p-4.5";
+const rowClass = "grid grid-cols-2 gap-4.5 max-[640px]:grid-cols-1";
+const labelClass = "mb-1.5 block text-[12.5px] font-semibold text-[#334155]";
+const smallLabelClass = "mb-1.5 block text-[12px] font-medium text-[#475569]";
 // What every field shares: the border darkens under the pointer, and turns blue with a soft ring when typed in.
 const fieldLook =
-  "w-full rounded-[10px] border border-[#d9dee3] bg-white text-[#111827] shadow-[0_1px_2px_rgba(15,23,42,0.03)] transition-[border-color,box-shadow] duration-150 placeholder:text-[#9ca3af] hover:border-[#c3cad2] focus:border-[#2563eb] focus:ring-3 focus:ring-[#2563eb]/15 focus:outline-none";
+  "w-full rounded-xl border border-[#dbe3ed] bg-[#fbfdff] text-[#0f172a] shadow-[0_1px_2px_rgba(15,23,42,0.02)] transition-[border-color,box-shadow,background-color] duration-150 placeholder:text-[#94a3b8] hover:border-[#b8c6d7] focus:border-[#2563eb] focus:bg-white focus:ring-3 focus:ring-[#2563eb]/12 focus:outline-none";
 const inputClass = `${fieldLook} px-3.5 py-2.75 text-[14.5px]`;
 // The same field inside a service or a sub-box: a little smaller.
 const smallInputClass = `${fieldLook} px-3 py-2.25 text-[14px]`;
 const hintClass = "mt-1.5 text-[12.5px] leading-normal text-[#6b7280]";
-const subBoxClass = "mt-3 rounded-xl border border-[#e3e8e5] bg-[#f8faf9] p-4";
+const subBoxClass = "mt-3 rounded-xl border border-[#dbe7f5] bg-[#f8fbff] p-4";
 const uploadClass =
-  "block cursor-pointer rounded-[10px] border-[1.5px] border-dashed border-[#cfd6dd] bg-[#f8faf9] text-center text-[14px] text-[#6b7280] transition-colors duration-150 hover:border-[#2563eb] hover:bg-[#f4f8ff] hover:text-[#2563eb]";
+  "block cursor-pointer rounded-xl border-[1.5px] border-dashed border-[#bfdbfe] bg-[#f8fbff] text-center text-[14px] text-[#64748b] transition-colors duration-150 hover:border-[#2563eb] hover:bg-[#eff6ff] hover:text-[#2563eb]";
 const radioClass =
-  "flex cursor-pointer items-center gap-2 rounded-[10px] border border-[#d9dee3] bg-white px-3.5 py-2.5 text-[14px] font-medium transition-colors duration-150 hover:border-[#c3cad2] has-[:checked]:border-[#2563eb] has-[:checked]:bg-[#eff4fe] has-[:checked]:text-[#1d4ed8]";
-const listClass = "rounded-xl border border-[#e3e8e5] bg-white p-4.5";
+  "flex cursor-pointer items-center gap-2 rounded-xl border border-[#dbe3ed] bg-white px-3.5 py-2.5 text-[14px] font-medium transition-colors duration-150 hover:border-[#93c5fd] has-[:checked]:border-[#86efac] has-[:checked]:bg-[#f0fdf4] has-[:checked]:text-[#15803d]";
+const listClass = "rounded-xl border border-[#dbe7f5] bg-[#fbfdff] p-4.5";
 const tickClass = "flex cursor-pointer items-center gap-2 py-[5px] text-[14px] text-[#111827]";
 const checkboxClass = "size-4 flex-none accent-[#2563eb]";
 const addButtonClass =
-  "cursor-pointer rounded-lg border border-[#d9dee3] bg-white px-3 py-2 text-[13.5px] font-semibold whitespace-nowrap text-[#374151] transition-colors duration-150 hover:border-[#2563eb] hover:text-[#2563eb]";
+  "cursor-pointer rounded-lg border border-[#dbe3ed] bg-white px-3 py-2 text-[13px] font-semibold whitespace-nowrap text-[#475569] transition-colors duration-150 hover:border-[#93c5fd] hover:text-[#2563eb]";
 const subheadClass = "mt-3 mb-4 border-t border-[#eef0f3] pt-5 text-[15px] font-bold text-[#0f172a]";
 const buttonClass =
   "inline-flex cursor-pointer items-center justify-center rounded-[10px] border px-5.5 py-2.75 text-[14.5px] font-semibold transition-colors duration-150 disabled:cursor-wait disabled:opacity-70";
 // A card beside the form.
-const sideCardClass = "rounded-2xl border p-5";
+const sideCardClass = "rounded-2xl border p-5 shadow-[0_4px_14px_rgba(15,23,42,0.03)]";
 
 const ICONS = {
   people: (
@@ -131,30 +154,91 @@ const STATUSES: [ClientStatus, string][] = [
 
 // ── Small pieces ─────────────────────────────────────────────────────────────
 
-const Icon = ({ name }: { name: keyof typeof ICONS }) => (
-  <div className="grid size-11 flex-none place-items-center rounded-xl bg-[#eff4fe] text-[#2563eb] ring-1 ring-[#dbe6fb]">
+const Icon = ({ name, tone = "blue" }: { name: keyof typeof ICONS; tone?: "blue" | "green" | "amber" | "purple" | "slate" }) => {
+  const tones = {
+    blue: "bg-[#eaf2ff] text-[#2563eb] ring-[#dbeafe]",
+    green: "bg-[#ecfdf3] text-[#15803d] ring-[#bbf7d0]",
+    amber: "bg-[#fffbeb] text-[#b45309] ring-[#fde68a]",
+    purple: "bg-[#f5f3ff] text-[#7c3aed] ring-[#ddd6fe]",
+    slate: "bg-[#f1f5f9] text-[#475569] ring-[#e2e8f0]",
+  };
+  return (
+  <div className={`grid size-11 flex-none place-items-center rounded-xl ring-1 ${tones[tone]}`}>
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="size-[22px]" aria-hidden="true">
       {ICONS[name]}
     </svg>
   </div>
-);
+  );
+};
 
 const Star = () => <span className="text-[#dc2626]">*</span>;
 
+// The edit form uses the same visual language as the client detail view: every piece of
+// information has an icon and a clearly bounded home. Labels that don't need a bespoke icon
+// fall back to a document icon, rather than leaving an empty visual marker.
+const FIELD_ICONS: Record<string, LucideIcon> = {
+  "Contact name": User,
+  "Company name": Building2,
+  Email: Mail,
+  Phone: Phone,
+  Address: MapPin,
+  "Preferred communication method": MessageSquare,
+  "Best time to reach them": Bell,
+  "Time zone": Globe2,
+  Industry: BriefcaseBusiness,
+  "Business type": Building2,
+  "Website URL": Globe2,
+  "Google Business Profile": MapPin,
+  "Service area": MapPin,
+  "Target audience": Users,
+  Competitors: Link2,
+  "Social media profiles": Link2,
+  "Does the client have a logo?": Palette,
+  "Logo design price (one-time)": DollarSign,
+  "Number of concepts": Image,
+  "Style preferences": Palette,
+  "Other details": FileText,
+  "Contract start date": CalendarDays,
+  "Contract length": CalendarDays,
+  "Contract end date": CalendarDays,
+  "Renewal type": Bell,
+  "Cancellation notice": Bell,
+  "Renewal reminder": Bell,
+  "Is the contract signed?": ShieldCheck,
+  "Date signed": CalendarDays,
+  "Signed contract": FileText,
+  "Date sent": CalendarDays,
+  "Is a payment method on file?": CreditCard,
+  "Payment method": CreditCard,
+  "Billing cycle": CreditCard,
+  "Billing day": CalendarDays,
+  "Setup fee paid?": DollarSign,
+  Status: ShieldCheck,
+  "Account manager": User,
+  "Report delivery": Mail,
+  "Portal password": ShieldCheck,
+  "Confirm password": ShieldCheck,
+  "What the client sees in their portal": Users,
+  "Internal notes": StickyNote,
+};
+
 // One of the form's five parts.
-const Section = ({ icon, step, title, sub, children }: { icon: keyof typeof ICONS; step: number; title: ReactNode; sub: string; children: ReactNode }) => (
+const Section = ({ icon, step, title, sub, children }: { icon: keyof typeof ICONS; step: number; title: ReactNode; sub: string; children: ReactNode }) => {
+  const tones = ["blue", "green", "amber", "purple", "slate"] as const;
+  return (
   <section className={cardClass}>
-    <div className="mb-6 flex items-center gap-4 border-b border-[#eef0f3] pb-5">
-      <Icon name={icon} />
+    <div className="mb-5 flex items-center gap-4 border-b border-[#eef2f7] pb-4.5">
+      <Icon name={icon} tone={tones[step - 1]} />
       <div className="min-w-0">
-        <div className="mb-0.5 text-[11px] font-bold tracking-[0.08em] text-[#2563eb] uppercase">Step {step} of 5</div>
-        <h2 className="text-[18px] leading-tight font-bold text-[#0f172a]">{title}</h2>
-        <p className="mt-1 text-[13.5px] text-[#6b7280]">{sub}</p>
+        <div className="mb-0.5 text-[10.5px] font-bold tracking-[0.08em] text-[#64748b] uppercase">Step {step} of 5</div>
+        <h2 className="text-[18px] leading-tight font-semibold text-[#0f172a]">{title}</h2>
+        <p className="mt-1 text-[13px] text-[#64748b]">{sub}</p>
       </div>
     </div>
     {children}
   </section>
-);
+  );
+};
 
 // A label, what it labels, and a line under it. Without `htmlFor` it heads a group of choices.
 const Field = ({
@@ -162,6 +246,7 @@ const Field = ({
   htmlFor,
   required = false,
   small = false,
+  icon,
   hint,
   className = "mb-5",
   children,
@@ -170,25 +255,33 @@ const Field = ({
   htmlFor?: string;
   required?: boolean;
   small?: boolean;
+  icon?: LucideIcon;
   hint?: ReactNode;
   className?: string;
   children: ReactNode;
 }) => {
+  const labelText = typeof label === "string" ? label : "";
+  const FieldIcon = icon ?? FIELD_ICONS[labelText] ?? FileText;
   const text = (
     <>
       {label} {required ? <Star /> : null}
     </>
   );
   return (
-    <div className={className}>
-      {htmlFor ? (
-        <label htmlFor={htmlFor} className={small ? smallLabelClass : labelClass}>
-          {text}
-        </label>
-      ) : (
-        <div className={small ? smallLabelClass : labelClass}>{text}</div>
-      )}
-      {children}
+    <div className={`${className} rounded-xl border ${required ? "border-[#bbf7d0] bg-[#f4fbf6]" : "border-[#e2e8f0] bg-[#fbfdff]"} ${small ? "p-3" : "p-3.5"}`}>
+      <div className="flex items-center gap-2.5">
+        <span className={`flex shrink-0 items-center justify-center rounded-lg ${small ? "size-7" : "size-8"} ${required ? "bg-[#dcfce7] text-[#15803d]" : "bg-[#eff6ff] text-[#2563eb]"}`}>
+          <FieldIcon size={small ? 14 : 15} strokeWidth={2} />
+        </span>
+        {htmlFor ? (
+          <label htmlFor={htmlFor} className={`${small ? smallLabelClass : labelClass} mb-0`}>
+            {text}
+          </label>
+        ) : (
+          <div className={`${small ? smallLabelClass : labelClass} mb-0`}>{text}</div>
+        )}
+      </div>
+      <div className={small ? "mt-2.5" : "mt-3"}>{children}</div>
       {hint ? <div className={hintClass}>{hint}</div> : null}
     </div>
   );
@@ -372,53 +465,51 @@ const hasFrom = (client?: Client): string[] | undefined => {
   return list.filter(([, has]) => has).map(([key]) => key);
 };
 
-// What the client told us themselves — when signing up, and on the onboarding form — beside
-// the form while their record is edited, so it can be filled in from what they actually said.
-// Only what they gave; nothing at all for a client who gave nothing.
+// A compact, factual activity summary beside an existing client's edit form. The detailed
+// answers live on their record; keeping the sidebar short makes the form easier to work through.
 const ClientSaid = ({ client }: { client: Client }) => {
   const said = client.onboarding;
-  if (!said) return null;
-  const { business, goals, kickoffCall } = said;
-  const { answered, total } = countsOf(groupsOf({ onboarding: said }));
-  const uploaded = uploadsOf(said).reduce((sum, group) => sum + group.files.length, 0);
-  const lines: [label: string, value?: string][] = [
-    ["Onboarding form", said.status ? `${ONBOARDING_STATUS_LABELS[said.status]} · ${answered} of ${total} answered` : undefined],
-    ["About the business", business?.description],
-    ["Services they offer", business?.services?.join(", ")],
-    ["Areas they serve", business?.areas?.join(", ")],
-    ["Main contact", [business?.contact?.name, business?.contact?.email, business?.contact?.phone].filter(Boolean).join(" · ")],
-    ["Best way to reach them", REACH_BY[business?.contact?.reachBy ?? ""]],
-    ["Revenue per month", targetOf(goals?.revenue, money)],
-    ["Leads per month", targetOf(goals?.leads, String)],
-    ["New clients per month", targetOf(goals?.newClients, String)],
-    ["How soon", GOAL_TIMEFRAMES[goals?.timeframe ?? ""]],
-    ["Monthly marketing budget", GOAL_BUDGETS[goals?.budget ?? ""]],
-    ["Where leads come from", goals?.leadSources?.map((source) => LEAD_SOURCES[source] ?? source).join(", ")],
-    ["Kickoff call", kickoffCall ? (kickoffCall.booked ? "Booked (the client says so)" : "Not booked yet") : undefined],
-    ["Files uploaded", uploaded ? `${uploaded} file${uploaded === 1 ? "" : "s"}` : undefined],
+  const { answered, total } = countsOf(groupsOf({ onboarding: said ?? { status: "in_progress" } }));
+  const progress = total ? Math.round((answered / total) * 100) : 0;
+  const activities: [label: string, value: string, tone: "green" | "amber" | "slate"][] = [
+    ["Client added", formatDate(client.createdAt), "green"],
+    ["Latest update", formatDateTime(client.updatedAt), "slate"],
+    ...(said?.status ? [["Onboarding", `${ONBOARDING_STATUS_LABELS[said.status]} · ${progress}% complete`, said.status === "submitted" ? "green" : "amber"] as [string, string, "green" | "amber" | "slate"]] : []),
+    ...(said?.submittedAt ? [["Submitted", formatDate(said.submittedAt), "green"] as [string, string, "green" | "amber" | "slate"]] : []),
   ];
-  const given = lines.filter(([, value]) => value?.trim());
-  if (!given.length) return null;
+  const tones = {
+    green: "border-[#bbf7d0] bg-[#f4fbf6] text-[#15803d]",
+    amber: "border-[#fde68a] bg-[#fffbeb] text-[#a16207]",
+    slate: "border-[#e2e8f0] bg-[#f8fafc] text-[#475569]",
+  };
 
   return (
-    <div className={`${sideCardClass} border-[#d6e2f9] bg-[#f4f8ff]`}>
-      <h3 className="mb-3 text-[15.5px] leading-snug font-bold text-[#0f172a]">From the client</h3>
+    <div className={`${sideCardClass} border-[#bfdbfe] bg-[#f8fbff]`}>
+      <div className="mb-4 border-b border-[#dbeafe] pb-3">
+        <div className="text-[10.5px] font-bold tracking-[0.08em] text-[#2563eb] uppercase">Client activity</div>
+        <h3 className="mt-1 text-[16px] leading-snug font-semibold text-[#0f172a]">Record progress</h3>
+        <p className="mt-1 text-[12px] leading-normal text-[#64748b]">The latest milestones for this client.</p>
+      </div>
       <dl className="flex flex-col gap-2.5">
-        {given.map(([label, value]) => (
-          <div key={label}>
-            <dt className="text-[11.5px] font-semibold text-[#6b7280]">{label}</dt>
-            <dd className="text-[13px] leading-snug font-medium break-words whitespace-pre-wrap text-[#111827]">{value}</dd>
+        {activities.map(([label, value, tone]) => (
+          <div key={label} className={`rounded-lg border px-3 py-2.5 ${tones[tone]}`}>
+            <dt className="text-[11px] font-semibold">{label}</dt>
+            <dd className="mt-0.5 text-[12.5px] leading-snug font-medium">{value}</dd>
           </div>
         ))}
       </dl>
-      <Link href={`/clients/${client._id}`} className="mt-3.5 inline-block text-[13px] font-semibold text-[#2563eb] no-underline hover:underline">
-        Everything they answered →
+      <Link href={`/clients/${client._id}`} className="mt-4 inline-flex items-center rounded-lg px-2 py-1.5 text-[12.5px] font-semibold text-[#2563eb] no-underline hover:bg-[#eff6ff]">
+        View full client details →
       </Link>
     </div>
   );
 };
 
-const managerIdOf = (client?: Client) => (typeof client?.accountManager === "object" ? client.accountManager._id : (client?.accountManager ?? ""));
+const managerIdOf = (client?: Client) => {
+  // A manager who was deleted comes back as null.
+  const manager = client?.accountManager;
+  return manager && typeof manager === "object" ? manager._id : (manager ?? "");
+};
 
 // A service as it is being set up for this client. Numbers are kept as typed.
 type ServiceState = { on: boolean; values: string[]; included: { text: string; on: boolean }[]; addons: string[]; adding: string };
@@ -547,7 +638,7 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
 
   // The team to choose from — with the client's present manager among them even when the team
   // couldn't be listed, so that saving doesn't take them off.
-  const present = typeof client?.accountManager === "object" ? client.accountManager : undefined;
+  const present = client?.accountManager && typeof client.accountManager === "object" ? client.accountManager : undefined;
   const managers: [string, string][] = [...staff, ...(present && !staff.some((member) => member._id === present._id) ? [present] : [])].map((member) => [member._id, member.fullName]);
 
   const monthly = services.reduce((sum, state, index) => (state.on ? sum + amountOf(state, index) : sum), 0);
@@ -653,12 +744,27 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
 
   return (
     <div className={`${inter.className} w-full text-[15px] leading-[1.5] text-[#111827]`}>
-      <h1 className={`${fraunces.className} mb-1.5 text-[34px] leading-[1.15] font-bold tracking-[-0.01em] text-[#0f172a] max-[640px]:text-[28px]`}>{isEdit ? "Edit Client" : "Add New Client"}</h1>
-      <p className="mb-7 max-w-[72ch] text-[15px] text-[#6b7280]">
-        {isEdit
-          ? "Update the client's details. Their portal login is kept in sync."
-          : "Set up a client on their behalf. Portal access is optional, since many clients prefer that our team handles everything."}
-      </p>
+      <div className="mb-7 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#e2e8f0] bg-gradient-to-r from-white to-[#f8fbff] px-5 py-4 shadow-[0_4px_16px_rgba(15,23,42,0.035)] sm:px-6">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <span
+            className="flex size-14 shrink-0 items-center justify-center rounded-2xl text-[16px] font-bold text-white shadow-[0_4px_12px_rgba(15,23,42,0.14)]"
+            style={{ background: avatarColorFor(client?._id ?? companyName ?? "new-client") }}
+          >
+            {initialsOf(isEdit ? companyName || "Client" : "New Client")}
+          </span>
+          <div className="min-w-0">
+            <h1 className={`${fraunces.className} truncate text-[25px] leading-tight font-bold tracking-[-0.015em] text-[#0f172a] max-[640px]:text-[22px]`}>{isEdit ? companyName || "Edit Client" : "Add New Client"}</h1>
+            <p className="mt-1 truncate text-[13px] text-[#64748b]">
+              {isEdit
+                ? [contactName, "Edit client record and portal settings"].filter(Boolean).join(" · ")
+                : "Set up a client record, services and portal access."}
+            </p>
+          </div>
+        </div>
+        <Link href={backHref} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dbe3ed] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#475569] no-underline transition-colors hover:border-[#93c5fd] hover:bg-[#f8fbff] hover:text-[#2563eb]">
+          <ArrowLeft size={15} strokeWidth={2} /> Back
+        </Link>
+      </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)_340px] items-start gap-7 max-[960px]:grid-cols-1">
         <form onSubmit={handleSubmit}>
@@ -815,14 +921,14 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
                 if (text) changeService(index, (now) => ({ ...now, included: [...now.included, { text, on: true }], adding: "" }));
               };
               return (
-                <div key={service.name} className={`mb-3 overflow-hidden rounded-xl border ${state.on ? "border-[#2563eb] shadow-[0_0_0_3px_#e8effd]" : "border-[#e3e5e8]"}`}>
+                <div key={service.name} className={`mb-3 overflow-hidden rounded-xl border transition-colors ${state.on ? "border-[#86efac] bg-[#f4fbf6] shadow-[0_0_0_3px_#ecfdf3]" : "border-[#dbe3ed] bg-white"}`}>
                   <label className="flex cursor-pointer items-center gap-3 px-4 py-3.5">
-                    <input type="checkbox" checked={state.on} onChange={(event) => changeService(index, (now) => ({ ...now, on: event.target.checked }))} className="size-[18px] flex-none accent-[#2563eb]" />
+                    <input type="checkbox" checked={state.on} onChange={(event) => changeService(index, (now) => ({ ...now, on: event.target.checked }))} className="size-[18px] flex-none accent-[#16a34a]" />
                     <span className="flex-1 font-semibold">{service.name}</span>
-                    <span className={`font-semibold tabular-nums ${state.on ? "text-[#111827]" : "text-[#6b7280]"}`}>{money(state.on ? amountOf(state, index) : 0)}/mo</span>
+                    <span className={`font-semibold tabular-nums ${state.on ? "text-[#15803d]" : "text-[#64748b]"}`}>{money(state.on ? amountOf(state, index) : 0)}/mo</span>
                   </label>
                   {state.on ? (
-                    <div className="border-t border-[#e3e5e8] bg-[#fcfcfd] px-4 pt-1 pb-4">
+                    <div className="border-t border-[#bbf7d0] bg-white/70 px-4 pt-1 pb-4">
                       {service.note ? <div className="mt-3 text-[13px] text-[#6b7280]">{service.note}</div> : null}
                       <div className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3">
                         {service.fields.map((field, at) => (
@@ -909,12 +1015,12 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
               </div>
             ))}
 
-            <div className="mt-4 rounded-xl bg-[#0f172a] px-5 py-4 text-white">
+            <div className="mt-4 rounded-xl border border-[#86efac] bg-[#dcfce7] px-5 py-4 text-[#14532d]">
               <div className="flex items-center justify-between gap-3">
                 <span>Monthly total</span>
-                <strong className="text-[22px] font-bold tabular-nums">{money(monthly)}</strong>
+                <strong className="text-[22px] font-semibold tabular-nums">{money(monthly)}</strong>
               </div>
-              <div className="mt-1.5 flex items-center justify-between gap-3 border-t border-[#334155] pt-1.5 text-[14px] text-[#cbd5e1]">
+              <div className="mt-1.5 flex items-center justify-between gap-3 border-t border-[#bbf7d0] pt-1.5 text-[14px] text-[#3f6212]">
                 <span>One-time fees (e.g. logo design)</span>
                 <span className="tabular-nums">{money(oneTime)}</span>
               </div>
@@ -1164,27 +1270,33 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
             </div>
           ) : null}
 
-          <div className="flex justify-end gap-3 rounded-2xl border border-[#e3e8e5] bg-white px-6 py-4 shadow-[0_1px_2px_rgba(11,21,34,0.04)] max-[640px]:px-5">
-            <Link href={backHref} className={`${buttonClass} border-[#d9dee3] bg-white text-[#111827] no-underline hover:border-[#c3cad2] hover:bg-[#f8faf9]`}>
+          <div className="flex flex-col-reverse gap-3 rounded-2xl border border-[#e2e8f0] bg-white px-5 py-4 shadow-[0_5px_18px_rgba(15,23,42,0.035)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
+            <p className="text-[12.5px] text-[#64748b]">Changes are saved to this client&apos;s record and portal settings.</p>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row">
+            <Link href={backHref} className={`${buttonClass} justify-center border-[#dbe3ed] bg-white text-[#334155] no-underline hover:border-[#b8c6d7] hover:bg-[#f8fafc]`}>
               Cancel
             </Link>
-            <button type="submit" disabled={isPending} className={`${buttonClass} min-w-36 border-[#0b1522] bg-[#0b1522] text-white shadow-[0_1px_2px_rgba(11,21,34,0.2)] hover:bg-[#17263a]`}>
+            <button type="submit" disabled={isPending} className={`${buttonClass} min-w-36 justify-center border-[#2563eb] bg-[#2563eb] text-white shadow-[0_4px_10px_rgba(37,99,235,0.2)] hover:bg-[#1d4ed8]`}>
               {isPending ? "Saving…" : isEdit ? "Save changes" : "Save client"}
             </button>
+            </div>
           </div>
         </form>
 
         {/* Beside the form. It stays at the top of the window while the form scrolls under it; the
             stickiness is on the grid's own column, which is as tall as the form — a wrapper only
             as tall as these cards would have nowhere to stick. */}
-        <aside className="sticky top-6 flex max-h-[calc(100vh-3rem)] flex-col gap-4 self-start overflow-y-auto max-[960px]:static max-[960px]:order-first max-[960px]:max-h-none">
+        <aside className="sticky top-6 flex max-h-[calc(100vh-3rem)] flex-col gap-4 self-start overflow-y-auto pr-1 max-[960px]:static max-[960px]:order-first max-[960px]:max-h-none">
           {client ? (
             <ClientSaid client={client} />
           ) : (
-            <div className={`${sideCardClass} border-[#d6e2f9] bg-[#f4f8ff]`}>
+            <div className={`${sideCardClass} border-[#bfdbfe] bg-[#f8fbff]`}>
               <div className="mb-4 flex items-center gap-3">
                 <Icon name="people" />
-                <h3 className="text-[16px] leading-snug font-bold text-[#0f172a]">Adding a client for the team</h3>
+                <div>
+                  <div className="text-[10.5px] font-bold tracking-[0.08em] text-[#2563eb] uppercase">Client setup</div>
+                  <h3 className="mt-0.5 text-[16px] leading-snug font-semibold text-[#0f172a]">Adding a client for the team</h3>
+                </div>
               </div>
               <ul className="flex list-none flex-col gap-2.5">
                 {PERKS.map((perk) => (
@@ -1199,15 +1311,6 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
               </ul>
             </div>
           )}
-          <div className={`${sideCardClass} border-[#cfeedb] bg-[#f0fbf3]`}>
-            <h4 className="mb-1.5 text-[14.5px] font-bold text-[#0f172a]">💡 Tip</h4>
-            <p className="text-[13px] leading-normal text-[#4b5563]">Collect the client&apos;s logins and access details on the onboarding call so each onboarding item can be approved right away.</p>
-          </div>
-          <div className={`${sideCardClass} border-[#e3e8e5] bg-white`}>
-            <h4 className="mb-1.5 text-[14.5px] font-bold text-[#0f172a]">Need help?</h4>
-            <p className="text-[13px] leading-normal text-[#4b5563]">Not sure how to set up a client? Check the help docs or contact support.</p>
-            <span className="mt-2.5 inline-block text-[13px] font-semibold text-[#2563eb]">Contact Support →</span>
-          </div>
         </aside>
       </div>
     </div>

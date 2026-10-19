@@ -52,6 +52,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new BackendUnreachableError("Could not reach the server. Please try again.");
         }
 
+        // A server error (or a proxy in front of a backend that is down, answering 502) says
+        // nothing about the password: tell them the server couldn't be reached, not that what
+        // they typed is wrong.
+        if (res.status >= 500) {
+          throw new BackendUnreachableError("Could not reach the server. Please try again.");
+        }
+
         const body = await res.json().catch(() => null);
 
         // Backend refuses pending / inactive / blocked accounts with 403.

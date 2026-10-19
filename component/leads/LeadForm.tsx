@@ -259,7 +259,7 @@ const LeadForm = ({ lead, clients, canDelete = false }: { lead?: Lead; clients: 
 
   // Case types are typed in per firm. Suggest the ones this client already uses, so
   // "Car Accident" isn't also saved as "car accident" or "Auto Accident".
-  const clientId = lead ? (typeof lead.client === "object" ? lead.client._id : lead.client) : client;
+  const clientId = lead ? (lead.client && typeof lead.client === "object" ? lead.client._id : lead.client) : client;
   const [suggestions, setSuggestions] = useState<{ client: string; caseTypes: string[] }>({ client: "", caseTypes: [] });
   useEffect(() => {
     if (!clientId) return;

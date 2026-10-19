@@ -162,6 +162,7 @@ export const formatDateTime = (iso?: string) =>
     ? new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
     : "—";
 
-export const clientNameOf = (client: Lead["client"]) => (typeof client === "object" ? client.companyName : "");
+// A lead whose client was deleted comes back with `client: null`.
+export const clientNameOf = (client: Lead["client"] | null) => (client && typeof client === "object" ? client.companyName : "");
 export const personNameOf = (person: unknown) =>
   person && typeof person === "object" && "fullName" in person ? String((person as { fullName: string }).fullName) : undefined;

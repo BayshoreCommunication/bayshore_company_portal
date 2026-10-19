@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
+  AlertTriangle,
   ArrowUpRight,
   Bell,
   Briefcase,
@@ -15,8 +16,11 @@ import {
   ChevronDown,
   ClipboardList,
   Clock,
+  Copy,
   CreditCard,
   DollarSign,
+  Eye,
+  EyeOff,
   FileText,
   Globe,
   LayoutGrid,
@@ -39,6 +43,7 @@ import {
   User,
   UserCog,
   Users,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { deleteClientAction, updateClientAction, type Client, type ClientLogin, type ClientStatus } from "@/app/actions/clients";
@@ -86,7 +91,6 @@ import {
   btnDanger,
   btnDangerOutline,
   btnDraft,
-  deleteConfirm,
   dashPendingSub,
   sectionCard,
   sectionHeader,
@@ -97,12 +101,11 @@ import {
 
 const iconText = "inline-flex items-center gap-1.25";
 
-// "Add New Content" / "Add New Report" in the sidebar's dark navy.
-const btnDark =
-  "inline-flex cursor-pointer items-center gap-1.25 whitespace-nowrap rounded-md bg-[#0b1522] px-5 py-2.75 text-[13px] font-bold text-white no-underline shadow-[0_1px_2px_rgba(11,21,34,0.2)] hover:bg-[#17263a]";
-
-const sinceLabel = "mb-0.5 text-[10.5px] font-bold tracking-[0.6px] text-[#8496a3]";
-const sinceValue = "flex items-center gap-1.5 text-[12.5px] font-bold text-[#17242f]";
+// Header actions stay deliberately compact: there can be several useful actions for one client
+// without allowing them to overpower the client name and status.
+const headerAction = "inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#dbe3ed] bg-white px-3 text-[12px] font-semibold text-[#475569] no-underline transition-colors hover:border-[#93c5fd] hover:bg-[#f8fbff] hover:text-[#2563eb]";
+const headerPrimaryAction = "inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#0b1522] px-3 text-[12px] font-semibold text-white no-underline transition-colors hover:bg-[#17263a]";
+const headerDangerAction = "inline-flex h-9 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-[#fecaca] bg-white px-3 text-[12px] font-semibold text-[#dc2626] transition-colors hover:bg-[#fff7f7]";
 
 // The pieces a client's details are laid out with, shared by every card on their page.
 
@@ -134,48 +137,86 @@ const fieldValue = (service: string, label: string, value: number) =>
 // One field as it is read back: an icon, its label, and what it holds. A `wide` one (an
 // address, a list, a note) takes the whole row.
 // With a `tone` the value is where the thing stands, shown as a pill; `note` is a line of detail under it.
-type Row = { icon: LucideIcon; label: string; value?: string | null; wide?: boolean; tone?: Tone; note?: string };
+// `content` shows in place of the value, for one that needs more than text (a password to reveal).
+type Row = { icon: LucideIcon; label: string; value?: string | null; wide?: boolean; tone?: Tone; note?: string; content?: ReactNode };
+
+const rowStyleOf = (row: Row) => {
+  const value = row.value?.trim() ?? "";
+  const pending = /^(not yet|not booked|unassigned|nothing ticked)/i.test(value);
+
+  if (!value || value === NONE || row.tone === "none") {
+    return {
+      card: "border-[#fecaca] bg-[#fff7f7]",
+      icon: "bg-[#fee2e2] text-[#dc2626]",
+      label: "text-[#b45309]",
+      value: "text-[#b91c1c]",
+      note: "text-[#b45309]",
+    };
+  }
+  if (pending || (row.tone && row.tone !== "ready")) {
+    return {
+      card: "border-[#fde68a] bg-[#fffbeb]",
+      icon: "bg-[#fef3c7] text-[#b45309]",
+      label: "text-[#a16207]",
+      value: "text-[#92400e]",
+      note: "text-[#a16207]",
+    };
+  }
+  return {
+    card: "border-[#bbf7d0] bg-[#f4fbf6]",
+    icon: "bg-[#dcfce7] text-[#15803d]",
+    label: "text-[#15803d]",
+    value: "text-[#14532d]",
+    note: "text-[#3f6212]",
+  };
+};
 
 const Rows = ({ rows }: { rows: Row[] }) => (
-  <div className="grid grid-cols-2 gap-x-6 gap-y-4.5 max-[900px]:grid-cols-1">
-    {rows.map((row) => (
-      <div key={row.label} className={`flex items-start gap-3 ${row.wide ? "col-span-full" : ""}`}>
-        <span className="flex h-8.5 w-8.5 shrink-0 items-center justify-center rounded-lg bg-[#f1f5f3] text-[#4a5c68]">
-          <row.icon size={15} strokeWidth={2} />
-        </span>
-        <div className="min-w-0">
-          <div className="text-[11.5px] font-semibold text-[#7a8e9b]">{row.label}</div>
-          {row.value?.trim() && row.tone ? (
-            <span className={`${pill} mt-1 ${TONES[row.tone].className}`}>{row.value}</span>
-          ) : row.value?.trim() && linkOf(row.value) ? (
-            <a href={linkOf(row.value) ?? undefined} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 text-[13px] leading-snug font-semibold text-[#2563eb] hover:underline">
-              <span className="truncate">{row.value.trim()}</span>
-              <ArrowUpRight size={12} strokeWidth={2.25} className="shrink-0" />
-            </a>
-          ) : row.value?.trim() ? (
-            <div className="text-[13px] leading-snug font-semibold break-words whitespace-pre-wrap text-[#17242f]">{row.value}</div>
-          ) : (
-            <div className="text-[13px] leading-snug font-medium text-[#a3b1ba]">None</div>
-          )}
-          {row.note ? <div className="mt-1 text-[12px] leading-normal break-words whitespace-pre-wrap text-[#657787]">{row.note}</div> : null}
+  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    {rows.map((row) => {
+      const style = rowStyleOf(row);
+      const value = row.value?.trim();
+      return (
+        <div key={row.label} className={`flex min-w-0 items-start gap-3 rounded-xl border p-3.5 ${style.card} ${row.wide ? "sm:col-span-full" : ""}`}>
+          <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${style.icon}`}>
+            <row.icon size={16} strokeWidth={2} />
+          </span>
+          <div className="min-w-0 pt-0.5">
+            <div className={`text-[11px] font-semibold tracking-[0.01em] ${style.label}`}>{row.label}</div>
+            {row.content ? (
+              <div className={`mt-1 text-[13px] leading-snug font-semibold ${style.value}`}>{row.content}</div>
+            ) : value && row.tone ? (
+              <span className={`${pill} mt-1.5 ${TONES[row.tone].className}`}>{value}</span>
+            ) : value && linkOf(value) ? (
+              <a href={linkOf(value) ?? undefined} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex max-w-full items-center gap-1 text-[13px] leading-snug font-semibold text-[#2563eb] hover:underline">
+                <span className="truncate">{value}</span>
+                <ArrowUpRight size={12} strokeWidth={2.25} className="shrink-0" />
+              </a>
+            ) : value ? (
+              <div className={`mt-1 text-[13px] leading-snug font-semibold break-words whitespace-pre-wrap ${style.value}`}>{value}</div>
+            ) : (
+              <div className={`mt-1 text-[13px] leading-snug font-medium ${style.value}`}>None</div>
+            )}
+            {row.note ? <div className={`mt-1.5 text-[12px] leading-normal break-words whitespace-pre-wrap ${style.note}`}>{row.note}</div> : null}
+          </div>
         </div>
-      </div>
-    ))}
+      );
+    })}
   </div>
 );
 
 // One of the form's five parts: its icon and name as the form has them, and — for those who
 // can — the way to the form to change it.
 const Section = ({ icon: Icon, title, sub, editHref, children }: { icon: LucideIcon; title: string; sub: string; editHref?: string; children: ReactNode }) => (
-  <section className="rounded-xl border border-[#dbe3de] bg-white">
-    <div className="flex items-center justify-between gap-3 border-b border-[#eef3ef] px-5.5 py-4">
+  <section className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_4px_16px_rgba(15,23,42,0.035)]">
+    <div className="flex items-center justify-between gap-3 border-b border-[#eef2f7] bg-[#fbfdff] px-5 py-4 sm:px-5.5">
       <div className="flex min-w-0 items-center gap-3.5">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] bg-[#eff4fe] text-[#2563eb]">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eaf2ff] text-[#2563eb]">
           <Icon size={19} strokeWidth={2} />
         </span>
         <div className="min-w-0">
-          <h2 className="text-[15.5px] leading-tight font-bold text-[#0d1e2c]">{title}</h2>
-          <p className="mt-0.5 text-[12px] text-[#7a8e9b]">{sub}</p>
+          <h2 className="text-[15.5px] leading-tight font-semibold text-[#0f172a]">{title}</h2>
+          <p className="mt-0.5 text-[12px] text-[#64748b]">{sub}</p>
         </div>
       </div>
       {editHref ? (
@@ -184,7 +225,7 @@ const Section = ({ icon: Icon, title, sub, editHref, children }: { icon: LucideI
         </Link>
       ) : null}
     </div>
-    <div className="px-5.5 py-5">{children}</div>
+    <div className="px-5 py-5 sm:px-5.5">{children}</div>
   </section>
 );
 
@@ -370,35 +411,35 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
 
       <Section icon={DollarSign} title="Services and pricing" sub="The services the client agreed to, with their quantities and prices." editHref={editHref}>
         {services.map((plan) => (
-          <div key={plan.name} className="border-t border-[#eef3ef] py-3.5 text-[12.5px] first:border-t-0 first:pt-0">
-            <div className="flex items-baseline justify-between gap-3 text-[13.5px] font-bold text-[#17242f]">
+          <div key={plan.name} className="mb-3 rounded-xl border border-[#bbf7d0] bg-[#f4fbf6] p-3.5 text-[12.5px] last:mb-0">
+            <div className="flex items-baseline justify-between gap-3 text-[13.5px] font-semibold text-[#14532d]">
               <span>{plan.name}</span>
               <span className="tabular-nums whitespace-nowrap">{money(plan.monthly)}/mo</span>
             </div>
-            <div className="mt-1 text-[12px] leading-normal text-[#556977]">{plan.fields.map((field) => `${field.label}: ${fieldValue(plan.name, field.label, field.value)}`).join(" · ")}</div>
-            <div className="mt-1.5 text-[12px] leading-normal text-[#556977]">
-              <b className="font-semibold text-[#7a8e9b]">Included:</b> {listed(plan.included) ?? "Nothing ticked"}
+            <div className="mt-1 text-[12px] leading-normal text-[#3f6212]">{plan.fields.map((field) => `${field.label}: ${fieldValue(plan.name, field.label, field.value)}`).join(" · ")}</div>
+            <div className="mt-1.5 text-[12px] leading-normal text-[#3f6212]">
+              <b className="font-semibold text-[#15803d]">Included:</b> {listed(plan.included) ?? "Nothing ticked"}
             </div>
             {plan.addons.length ? (
-              <div className="mt-1 text-[12px] leading-normal text-[#556977]">
-                <b className="font-semibold text-[#7a8e9b]">Add-on rates (not billed now):</b> {plan.addons.map((addon) => `${addon.label} ${money(addon.price)}`).join(" · ")}
+              <div className="mt-1 text-[12px] leading-normal text-[#3f6212]">
+                <b className="font-semibold text-[#15803d]">Add-on rates (not billed now):</b> {plan.addons.map((addon) => `${addon.label} ${money(addon.price)}`).join(" · ")}
               </div>
             ) : null}
           </div>
         ))}
         {unpriced.length ? (
-          <div className={`${services.length ? "border-t border-[#eef3ef] pt-3.5" : ""} text-[12.5px]`}>
-            <b className="text-[13.5px] font-bold text-[#17242f]">{unpriced.join(", ")}</b>
+          <div className="rounded-xl border border-[#fecaca] bg-[#fff7f7] p-3.5 text-[12.5px]">
+            <b className="text-[13.5px] font-semibold text-[#b91c1c]">{unpriced.join(", ")}</b>
             <div className={`${dashPendingSub} mt-1`}>No quantities or prices were recorded for {unpriced.length === 1 ? "this service" : "these services"}.</div>
           </div>
         ) : null}
-        {services.length || unpriced.length ? null : <div className="text-[13px] font-medium text-[#a3b1ba]">No services yet.</div>}
-        <div className="mt-4 rounded-lg bg-[#0b1522] px-4 py-3 text-[12.5px] text-white">
+        {services.length || unpriced.length ? null : <div className="rounded-xl border border-[#fecaca] bg-[#fff7f7] p-3.5 text-[13px] font-medium text-[#b91c1c]">No services yet.</div>}
+        <div className="mt-4 rounded-xl border border-[#86efac] bg-[#dcfce7] px-4 py-3 text-[12.5px] text-[#14532d]">
           <div className="flex items-baseline justify-between gap-3">
             <span>Monthly total</span>
-            <b className="text-[16px] font-bold tabular-nums">{money(monthly)}</b>
+            <b className="text-[16px] font-semibold tabular-nums">{money(monthly)}</b>
           </div>
-          <div className="mt-1.5 flex items-baseline justify-between gap-3 border-t border-[#23374e] pt-1.5 text-[#c7d2da]">
+          <div className="mt-1.5 flex items-baseline justify-between gap-3 border-t border-[#bbf7d0] pt-1.5 text-[#3f6212]">
             <span>One-time fees (logo design)</span>
             <span className="tabular-nums">{money(oneTime)}</span>
           </div>
@@ -467,6 +508,20 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
         <Rows
           rows={[
             { icon: UserCog, label: "Account manager", value: manager },
+            // The portal password — only ever sent to those who manage clients (who get the edit link).
+            {
+              icon: Lock,
+              label: "Portal password",
+              value: client.portalPassword
+                ? client.portalPassword
+                : !client.user
+                  ? "No portal login"
+                  : !editHref
+                    ? "Only managers can see it"
+                    : "Not saved — set a new password on Edit Client to see it",
+              tone: client.portalPassword ? undefined : "none",
+              content: client.portalPassword ? <PasswordValue password={client.portalPassword} /> : undefined,
+            },
             { icon: Users, label: "Assigned staff", value: team.join(", ") },
             // No choice made is every page. Settings is always there, so it isn't among them.
             {
@@ -492,13 +547,14 @@ const pill = "inline-flex shrink-0 items-center whitespace-nowrap rounded-xl px-
 // Fields and what is in them — "None", greyed, where there is nothing. A web address opens in
 // a new tab.
 const Fields = ({ rows }: { rows: [label: string, value: string][] }) => (
-  <dl className="flex flex-col gap-1.5">
+  <dl className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
     {rows.map(([label, value]) => {
       const link = linkOf(value);
+      const missing = value === NONE;
       return (
-        <div key={label} className="grid grid-cols-[150px_minmax(0,1fr)] gap-2.5 text-[12px]">
-          <dt className="font-semibold text-[#7a8e9b]">{label}</dt>
-          <dd className={`whitespace-pre-line break-words ${value === NONE ? "text-[#a3b1ba]" : "text-[#24333f]"}`}>
+        <div key={label} className={`rounded-lg border px-3 py-2.5 text-[12px] ${missing ? "border-[#fecaca] bg-[#fff7f7]" : "border-[#bbf7d0] bg-[#f4fbf6]"}`}>
+          <dt className={`mb-1 font-semibold ${missing ? "text-[#b45309]" : "text-[#15803d]"}`}>{label}</dt>
+          <dd className={`whitespace-pre-line break-words ${missing ? "text-[#b91c1c]" : "text-[#14532d]"}`}>
             {link ? (
               <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex max-w-full items-center gap-1 text-[#2563eb] hover:underline">
                 <span className="truncate">{link}</span>
@@ -517,8 +573,8 @@ const Fields = ({ rows }: { rows: [label: string, value: string][] }) => (
 // One thing the client was asked about, in a box of its own: where it stands for the team,
 // and all of its fields.
 const ItemBox = ({ item }: { item: Item }) => (
-  <div className="rounded-lg border border-[#e6ece8] bg-[#fbfcfb] p-4">
-    <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-[#eef3ef] pb-2.5">
+  <div className={`rounded-xl border p-4 ${item.tone === "ready" ? "border-[#bbf7d0] bg-[#f4fbf6]" : item.tone === "none" ? "border-[#fecaca] bg-[#fff7f7]" : "border-[#fde68a] bg-[#fffbeb]"}`}>
+    <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2 border-b border-current/10 pb-2.5">
       <span className="text-[13px] font-bold text-[#17242f]">{item.name}</span>
       <span className={`${pill} ${TONES[item.tone].className}`}>{item.label}</span>
     </div>
@@ -595,11 +651,21 @@ const OnboardingAnswerTabs = ({ onboarding, first }: { onboarding?: OnboardingAn
 
 // ── A client's page ──────────────────────────────────────────────────────────
 
-// Delete, then "Delete {name} and its portal login?" to confirm.
-const DeleteClientButton = ({ clientId, name }: { clientId: string; name: string }) => {
+// Deleting a client affects their portal account too, so the destructive action lives in a
+// dedicated dialog instead of expanding the page header in place.
+const DeleteClientButton = ({ clientId, name, className = btnDangerOutline }: { clientId: string; name: string; className?: string }) => {
   const router = useRouter();
-  const [confirming, setConfirming] = useState(false);
+  const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isPending) setOpen(false);
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open, isPending]);
 
   const handleDelete = () => {
     startTransition(async () => {
@@ -613,30 +679,67 @@ const DeleteClientButton = ({ clientId, name }: { clientId: string; name: string
     });
   };
 
-  if (!confirming) {
-    return (
-      <button type="button" className={btnDangerOutline} onClick={() => setConfirming(true)}>
+  return (
+    <>
+      <button type="button" className={className} onClick={() => setOpen(true)}>
         <Trash2 size={13} strokeWidth={2} /> Delete
       </button>
-    );
-  }
 
-  return (
-    <span className={deleteConfirm}>
-      <span>Delete {name} and its portal login?</span>
-      <button type="button" className={btnDanger} disabled={isPending} aria-busy={isPending} onClick={handleDelete}>
-        {isPending ? (
-          <>
-            <Loader2 size={13} strokeWidth={2.5} className="animate-spin" /> Deleting…
-          </>
-        ) : (
-          "Yes, delete"
-        )}
-      </button>
-      <button type="button" className={btnDraft} disabled={isPending} onClick={() => setConfirming(false)}>
-        Cancel
-      </button>
-    </span>
+      {open ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f172a]/45 p-4 backdrop-blur-[2px]"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isPending) setOpen(false);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-client-title"
+            aria-describedby="delete-client-description"
+            className="w-full max-w-md rounded-2xl border border-[#e2e8f0] bg-white p-6 shadow-[0_24px_64px_rgba(15,23,42,0.24)]"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#fef2f2] text-[#dc2626]">
+                <AlertTriangle size={20} strokeWidth={2} />
+              </span>
+              <button
+                type="button"
+                aria-label="Close delete confirmation"
+                disabled={isPending}
+                onClick={() => setOpen(false)}
+                className="-mt-1 -mr-1 inline-flex size-8 cursor-pointer items-center justify-center rounded-lg text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#0f172a] disabled:cursor-wait"
+              >
+                <X size={17} strokeWidth={2} />
+              </button>
+            </div>
+            <h2 id="delete-client-title" className="mt-4 text-[18px] font-semibold tracking-[-0.01em] text-[#0f172a]">
+              Delete {name}?
+            </h2>
+            <p id="delete-client-description" className="mt-2 text-[13px] leading-6 text-[#64748b]">
+              This permanently removes the client record and its portal login. This action cannot be undone.
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button type="button" className={`${btnDraft} justify-center`} disabled={isPending} onClick={() => setOpen(false)}>
+                Cancel
+              </button>
+              <button type="button" className={`${btnDanger} justify-center`} disabled={isPending} aria-busy={isPending} onClick={handleDelete}>
+                {isPending ? (
+                  <>
+                    <Loader2 size={13} strokeWidth={2.5} className="animate-spin" /> Deleting…
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={13} strokeWidth={2.25} /> Delete client
+                  </>
+                )}
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </>
   );
 };
 
@@ -690,7 +793,7 @@ const StatusPicker = ({ clientId, name, status }: { clientId: string; name: stri
   };
 
   return (
-    <div ref={menuRef} className="relative inline-block">
+    <div ref={menuRef} className={`relative inline-block ${open ? "z-50" : ""}`}>
       <button
         type="button"
         aria-haspopup="listbox"
@@ -706,7 +809,7 @@ const StatusPicker = ({ clientId, name, status }: { clientId: string; name: stri
       </button>
 
       {open ? (
-        <div role="listbox" aria-label="Change status" className="absolute top-full left-0 z-30 mt-1.5 w-64 rounded-[10px] border border-[#dbe3de] bg-white p-1.5 shadow-[0_12px_32px_rgba(11,21,34,0.16)]">
+        <div role="listbox" aria-label="Change status" className="absolute top-full left-0 z-50 mt-1.5 w-64 rounded-[10px] border border-[#dbe3de] bg-white p-1.5 shadow-[0_12px_32px_rgba(11,21,34,0.16)]">
           <div className="px-2.5 pt-1 pb-1.5 text-[10.5px] font-bold tracking-[0.6px] text-[#8496a3] uppercase">Change status</div>
           {CLIENT_STATUS_OPTIONS.map((option) => {
             const current = option.value === status;
@@ -735,6 +838,34 @@ const StatusPicker = ({ clientId, name, status }: { clientId: string; name: stri
 };
 
 const TABS = ["Overview", "Reports", "Content", "Meetings", "Messages", "Payments"];
+
+// The portal password, hidden behind dots until the eye is clicked, with a button to copy it.
+const PasswordValue = ({ password }: { password?: string }) => {
+  const [shown, setShown] = useState(false);
+  if (!password) return <b className="font-medium! text-[#a3b1ba]!">Not saved — set a new one to see it</b>;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(password);
+      toast.success("Password copied");
+    } catch {
+      toast.error("Couldn't copy the password.");
+    }
+  };
+  const iconButton = "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#2563eb]";
+
+  return (
+    <b className="flex min-w-0 items-center gap-1">
+      <span className="min-w-0 break-all font-mono">{shown ? password : "*".repeat(8)}</span>
+      <button type="button" aria-label={shown ? "Hide password" : "Show password"} onClick={() => setShown((value) => !value)} className={iconButton}>
+        {shown ? <EyeOff size={13} strokeWidth={2} /> : <Eye size={13} strokeWidth={2} />}
+      </button>
+      <button type="button" aria-label="Copy password" onClick={copy} className={iconButton}>
+        <Copy size={13} strokeWidth={2} />
+      </button>
+    </b>
+  );
+};
 
 const LOGIN_STATUS_LABEL: Record<ClientLogin["status"], string> = {
   pending: "Pending",
@@ -769,17 +900,19 @@ const ClientDetails = ({
         </div>
       </div>
 
-      <div className="flex items-start justify-between rounded-[10px] border border-[#dbe3de] bg-white px-5.5 py-5">
-        <div className="flex gap-4">
+      <section className="relative rounded-2xl border border-[#e2e8f0] bg-gradient-to-br from-white via-white to-[#f8fbff] px-5 py-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:px-6">
+        <div className="pointer-events-none absolute -top-20 -right-16 size-56 rounded-full bg-[#dbeafe]/45 blur-3xl" />
+        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+        <div className="flex min-w-0 gap-4">
           <div
-            className="flex h-16 w-16 items-center justify-center rounded-[14px] text-[18px] font-bold text-white"
+            className="flex h-15 w-15 shrink-0 items-center justify-center rounded-2xl text-[17px] font-bold text-white shadow-[0_5px_14px_rgba(15,23,42,0.15)]"
             style={{ background: avatarColorFor(client._id) }}
           >
             {initialsOf(client.companyName)}
           </div>
-          <div>
-            <div className="flex items-center gap-2.5">
-              <div className="font-[Georgia,serif] text-[22px] font-bold text-[#0b1a26]">{client.companyName}</div>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <h1 className="truncate text-[24px] font-semibold tracking-[-0.025em] text-[#0f172a]">{client.companyName}</h1>
               {/* Those who manage clients change the status right here; everyone else just sees it. */}
               {canManage ? (
                 <StatusPicker clientId={client._id} name={client.companyName} status={client.status} />
@@ -787,10 +920,10 @@ const ClientDetails = ({
                 <span className={statusClassName(client.status)}>{statusLabel(client.status)}</span>
               )}
             </div>
-            <div className="mt-0.5 text-[13px] text-[#657787]">
+            <div className="mt-1 text-[13px] text-[#64748b]">
               {[client.contactName, client.serviceTypes.join(", ")].filter(Boolean).join(" · ")}
             </div>
-            <div className="mt-2.5 flex flex-wrap gap-4 text-[12px] text-[#556977]">
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[12px] text-[#64748b]">
               {client.address ? (
                 <span className={iconText}>
                   <MapPin size={12} strokeWidth={2} /> {client.address}
@@ -808,62 +941,42 @@ const ClientDetails = ({
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-3">
-          <div className="flex flex-wrap justify-end gap-2">
-            <button className={`${btnDraft} ${iconText}`} type="button">
+        <div className="flex min-w-0 flex-col gap-3 xl:items-end">
+          <div className="flex flex-wrap gap-2 xl:justify-end">
+            <button className={headerAction} type="button">
               <MessageSquare size={13} strokeWidth={2} /> Message
             </button>
             {canManage ? (
-              <Link href={`/clients/${client._id}/edit`} className={`${btnDraft} ${iconText}`}>
+              <Link href={`/clients/${client._id}/edit`} className={headerAction}>
                 <Pencil size={13} strokeWidth={2} /> Edit Client
               </Link>
             ) : null}
             {/* Both open with this client already picked. */}
-            <Link href={`/content/add?client=${client._id}`} className={btnDark}>
+            <Link href={`/content/add?client=${client._id}`} className={headerPrimaryAction}>
               <Plus size={13} strokeWidth={2.5} /> Add New Content
             </Link>
-            <Link href={`/monthly-reports/add?client=${client._id}`} className={btnDark}>
+            <Link href={`/monthly-reports/add?client=${client._id}`} className={headerPrimaryAction}>
               <Plus size={13} strokeWidth={2.5} /> Add New Report
             </Link>
-            {canDelete ? <DeleteClientButton clientId={client._id} name={client.companyName} /> : null}
-          </div>
-          <div className="flex gap-5 rounded-lg border border-[#eef3ef] bg-[#f7f9f8] px-4 py-2.5">
-            <div>
-              <div className={sinceLabel}>Client Since</div>
-              <div className={sinceValue}>
-                <Calendar size={12} strokeWidth={2} /> {formatDate(client.startDate)}
-              </div>
-            </div>
-            <div>
-              <div className={sinceLabel}>Account Manager</div>
-              <div className={sinceValue}>
-                {manager ? (
-                  <>
-                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0b1522] text-[9px] font-bold text-white">
-                      {initialsOf(manager)}
-                    </span>{" "}
-                    {manager}
-                  </>
-                ) : (
-                  "Unassigned"
-                )}
-              </div>
-            </div>
+            {canDelete ? <DeleteClientButton clientId={client._id} name={client.companyName} className={headerDangerAction} /> : null}
           </div>
         </div>
-      </div>
+        </div>
+      </section>
 
-      <div className="flex gap-5.5 border-b border-[#dbe3de] px-1">
+      <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-[#e2e8f0] bg-white p-1.5">
         {TABS.map((tab) => (
-          <span
+          <button
             key={tab}
-            className={`cursor-pointer pb-2.5 text-[13px] font-semibold ${
-              tab === activeTab ? "border-b-2 border-[#2563eb] text-[#2563eb]" : "text-[#7a8e9b]"
+            type="button"
+            aria-pressed={tab === activeTab}
+            className={`cursor-pointer whitespace-nowrap rounded-lg px-3.5 py-2 text-[12.5px] font-medium transition-colors ${
+              tab === activeTab ? "bg-[#eff6ff] text-[#1d4ed8]" : "text-[#64748b] hover:bg-[#f8fafc] hover:text-[#0f172a]"
             }`}
             onClick={() => setActiveTab(tab)}
           >
             {tab}
-          </span>
+          </button>
         ))}
       </div>
 
@@ -882,67 +995,53 @@ const ClientDetails = ({
           </div>
 
           <aside className="sticky top-5 flex flex-col gap-4 max-[1100px]:static">
-            <div className={sectionCard}>
-              <div className={sectionHeader}>
-                <span className={sectionTitle}>Portal Login</span>
-              </div>
-              {/* Without a login the fields are still listed, as "None". */}
-              <div className={infoTable}>
-                <div>
-                  <span>Sign-in email</span>
-                  <Value>{login?.email}</Value>
+            {login ? (
+              <div className={sectionCard}>
+                <div className={sectionHeader}>
+                  <span className={sectionTitle}>Portal Access</span>
                 </div>
-                <div>
-                  <span>Login status</span>
-                  <Value>{login ? LOGIN_STATUS_LABEL[login.status] : undefined}</Value>
-                </div>
-                <div>
-                  <span>Last sign-in</span>
-                  <Value>{login ? formatDateTime(login.lastLoginAt) : undefined}</Value>
-                </div>
-              </div>
-              {login ? null : <div className={`${dashPendingSub} mt-3`}>This client has no portal login.</div>}
-            </div>
-
-            <div className={sectionCard}>
-              <div className={sectionHeader}>
-                <span className={sectionTitle}>Onboarding Form</span>
-              </div>
-              <div className={infoTable}>
-                <div>
-                  <span>Form status</span>
-                  <Value>{client.onboarding?.status ? ONBOARDING_STATUS_LABELS[client.onboarding.status] : undefined}</Value>
-                </div>
-                <div>
-                  <span>Submitted on</span>
-                  <Value>{client.onboarding?.submittedAt ? formatDate(client.onboarding.submittedAt) : undefined}</Value>
-                </div>
-              </div>
-              {client.onboarding?.status ? null : <div className={`${dashPendingSub} mt-3`}>This client didn&apos;t go through the onboarding form.</div>}
-            </div>
-
-            <div className={sectionCard}>
-              <div className={sectionHeader}>
-                <span className={sectionTitle}>Record</span>
-              </div>
-              <div className={infoTable}>
-                <div>
-                  <span>Added on</span>
-                  <Value>{client.createdAt ? formatDate(client.createdAt) : undefined}</Value>
-                </div>
-                <div>
-                  <span>Last updated</span>
-                  <Value>{client.updatedAt ? formatDate(client.updatedAt) : undefined}</Value>
-                </div>
-                {/* Only a client who made their own account agreed to them there. */}
-                {client.termsAcceptedAt ? (
+                <div className={infoTable}>
                   <div>
-                    <span>Terms agreed</span>
-                    <Value>{formatDate(client.termsAcceptedAt)}</Value>
+                    <span>Sign-in email</span>
+                    <Value>{login.email}</Value>
                   </div>
-                ) : null}
+                  {canManage ? (
+                    <div>
+                      <span>Password</span>
+                      <PasswordValue password={client.portalPassword} />
+                    </div>
+                  ) : null}
+                  <div>
+                    <span>Access status</span>
+                    <Value>{LOGIN_STATUS_LABEL[login.status]}</Value>
+                  </div>
+                  <div>
+                    <span>Last sign-in</span>
+                    <Value>{login.lastLoginAt ? formatDateTime(login.lastLoginAt) : "Not signed in yet"}</Value>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : null}
+
+            {client.onboarding?.status ? (
+              <div className={sectionCard}>
+                <div className={sectionHeader}>
+                  <span className={sectionTitle}>Onboarding</span>
+                </div>
+                <div className={infoTable}>
+                  <div>
+                    <span>Status</span>
+                    <Value>{ONBOARDING_STATUS_LABELS[client.onboarding.status]}</Value>
+                  </div>
+                  {client.onboarding.submittedAt ? (
+                    <div>
+                      <span>Submitted</span>
+                      <Value>{formatDate(client.onboarding.submittedAt)}</Value>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </aside>
         </div>
       )}

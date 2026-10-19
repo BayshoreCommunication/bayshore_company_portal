@@ -16,34 +16,49 @@ import {
   Wallet,
   type LucideIcon,
 } from "lucide-react";
+import type { DashboardFigure, DashboardOverviewData, DashboardReviewKind, DashboardReviewStatus } from "@/app/actions/dashboard";
 
 // The staff dashboard: how the whole book of clients is doing this month, laid out like
-// the client portal's dashboard. Every figure below is sample data until it's wired to the API.
+// the client portal's dashboard. The figures come from GET /dashboard/overview
+// (backend/controllers/dashboard.controller.ts), over the clients the viewer can see.
 
 const cardClass = "rounded-2xl border border-[#e6e8eb] bg-white shadow-[0_2px_6px_rgba(15,23,42,0.05)]";
 
 type TrendDirection = "up" | "down" | "flat";
 type Change = { percent: number; direction: TrendDirection };
 
-// "October 2026" / "September" / "Sep" — this month and the ones before, for the sample text.
+// "October 2026" / "September" / "Sep" — this month and the ones before (UTC, as the API counts them).
 const monthName = (offset: number, options: Intl.DateTimeFormatOptions) => {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + offset, 1)).toLocaleDateString("en-US", { ...options, timeZone: "UTC" });
 };
 
-// The date tile for a meeting some days from today, so the sample never shows a past date.
-const dayFromNow = (days: number) => {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
+// The date tile for a meeting.
+const dateTile = (iso: string) => {
+  const date = new Date(iso);
   return {
     month: date.toLocaleDateString("en-US", { month: "short" }),
     day: String(date.getDate()).padStart(2, "0"),
   };
 };
 
+// How a figure moved since the same point last month. With nothing last month there is no
+// percentage to give ("—"), unless there is nothing now either.
+const changeOf = ({ value, previous }: DashboardFigure): Change | null => {
+  if (!previous) return value ? null : { percent: 0, direction: "flat" };
+  const percent = (Math.abs(value - previous) / previous) * 100;
+  return { percent, direction: value > previous ? "up" : value < previous ? "down" : "flat" };
+};
+
+// The same, for the small figures under a chart — which show nothing when nothing moved.
+const metricChangeOf = (figure: DashboardFigure) => {
+  const change = changeOf(figure);
+  return change && change.direction !== "flat" ? { percent: change.percent, direction: change.direction } : undefined;
+};
+
 // ── The four headline cards ──────────────────────────────────────────────────
 
-const SAMPLE_CARDS: {
+type HeadlineCard = {
   title: string;
   value: string;
   change: Change | null;
@@ -53,14 +68,35 @@ const SAMPLE_CARDS: {
   icon: LucideIcon;
   color: string;
   background: string;
-}[] = [
-  { title: "ACTIVE CLIENTS", value: "48", change: { percent: 4.3, direction: "up" }, href: "/clients", icon: Users, color: "#2f5fd8", background: "#dce4f3" },
-  { title: "LEADS CAPTURED", value: "312", change: { percent: 8, direction: "up" }, href: "/leads", icon: UserPlus, color: "#16a34a", background: "#d6ebdc" },
-  { title: "REVENUE COLLECTED", value: "$28.5K", change: { percent: 2.6, direction: "down" }, href: "/payments", icon: Wallet, color: "#4f46e5", background: "#e0e0f3" },
+};
+
+// $28,450 → "$28.5K"; under a thousand as it is.
+const formatShortMoney = (value: number) => (value >= 1000 ? `$${Math.round(value / 100) / 10}K` : `$${value}`);
+
+const headlineCards = ({ cards }: DashboardOverviewData): HeadlineCard[] => [
+  {
+    title: "ACTIVE CLIENTS",
+    value: String(cards.activeClients.value),
+    change: changeOf(cards.activeClients),
+    href: "/clients",
+    icon: Users,
+    color: "#2f5fd8",
+    background: "#dce4f3",
+  },
+  { title: "LEADS CAPTURED", value: String(cards.leads.value), change: changeOf(cards.leads), href: "/leads", icon: UserPlus, color: "#16a34a", background: "#d6ebdc" },
+  {
+    title: "REVENUE COLLECTED",
+    value: formatShortMoney(cards.collected.value),
+    change: changeOf(cards.collected),
+    href: "/payments",
+    icon: Wallet,
+    color: "#4f46e5",
+    background: "#e0e0f3",
+  },
   {
     title: "UNPAID PAYMENTS",
-    value: "$14.9K",
-    change: { percent: 18.3, direction: "up" },
+    value: formatShortMoney(cards.unpaid.value),
+    change: changeOf(cards.unpaid),
     lowerIsBetter: true,
     href: "/payments",
     icon: Receipt,
@@ -96,8 +132,10 @@ const formatNumber = (value: number) => value.toLocaleString("en-US");
 const formatMoney = (value: number) => `$${formatNumber(value)}`;
 const formatTick = (value: number) => (value >= 1000 ? `${Math.round((value / 1000) * 10) / 10}K` : String(value));
 
-// A round top for the chart: 4 equal steps of 1, 2, 2.5 or 5 × a power of ten.
+// A round top for the chart: 4 equal steps of 1, 2, 2.5 or 5 × a power of ten — at least 4,
+// so an empty chart or a handful of clients still gets whole-number steps.
 const niceMax = (value: number) => {
+  if (value <= 4) return 4;
   const rough = value / 4;
   const power = 10 ** Math.floor(Math.log10(rough));
   const step = [1, 2, 2.5, 5, 10].map((factor) => factor * power).find((candidate) => candidate >= rough) ?? rough;
@@ -181,21 +219,10 @@ type Series = { name: string; color: string; values: number[] };
 // A lighter step of a series color. Opaque, so gridlines never show through a mark.
 const tint = (color: string, percent: number) => `color-mix(in srgb, ${color} ${percent}%, white)`;
 
-// Twelve months, oldest first; the last is this month.
-const SAMPLE_REVENUE: Series[] = [
-  { name: "Collected", color: COLLECTED, values: [14200, 15100, 16400, 15800, 17900, 18600, 19800, 21400, 23650, 25100, 29200, 28450] },
-  { name: "Unpaid", color: UNPAID, values: [0, 0, 300, 0, 450, 0, 600, 900, 1200, 1850, 3400, 6200] },
-];
-
-const SAMPLE_NEW_CLIENTS: Series[] = [{ name: "New clients", color: NEW_CLIENTS, values: [2, 1, 3, 2, 4, 2, 3, 2, 2, 1, 3, 3] }];
-
-// What each client still owes, largest first. `overdueDays` is missing while an invoice isn't due yet.
-const SAMPLE_UNPAID: { client: string; amount: number; overdueDays?: number; dueInDays?: number }[] = [
-  { client: "Carter Injury Law", amount: 4200, overdueDays: 21 },
-  { client: "Apex Advisor Group", amount: 3650, dueInDays: 6 },
-  { client: "McCulloch Law P.A.", amount: 2800, overdueDays: 9 },
-  { client: "Tiki Travel Agency", amount: 1950, dueInDays: 12 },
-  { client: "4 other clients", amount: 2300 },
+// The revenue chart's two series, twelve months oldest first; the last is this month.
+const revenueSeries = ({ revenue }: DashboardOverviewData): Series[] => [
+  { name: "Collected", color: COLLECTED, values: revenue.collected },
+  { name: "Unpaid", color: UNPAID, values: revenue.unpaid },
 ];
 
 // One month's figures, shown while its slot is hovered or focused (the slot is the `group`).
@@ -521,8 +548,9 @@ const AreaChart = ({
 };
 
 // What was invoiced each month, split into what has come in and what is still owed.
-const RevenueCard = () => {
-  const [collected, unpaid] = SAMPLE_REVENUE;
+const RevenueCard = ({ data }: { data: DashboardOverviewData }) => {
+  const series = revenueSeries(data);
+  const [collected, unpaid] = series;
   const last = collected.values.length - 1;
   const invoiced = collected.values[last] + unpaid.values[last];
 
@@ -540,7 +568,7 @@ const RevenueCard = () => {
       />
 
       <div className="mt-5 mb-4 flex items-center gap-4 text-[11.5px] text-[#4b5260]">
-        {SAMPLE_REVENUE.map((item) => (
+        {series.map((item) => (
           <span key={item.name} className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-xs" style={{ background: item.color }} />
             {item.name}
@@ -548,14 +576,14 @@ const RevenueCard = () => {
         ))}
       </div>
 
-      <AreaChart id="revenue" series={SAMPLE_REVENUE} format={formatMoney} tickFormat={(value) => `$${formatTick(value)}`} />
+      <AreaChart id="revenue" series={series} format={formatMoney} tickFormat={(value) => `$${formatTick(value)}`} />
 
       <MetricGrid
         metrics={[
-          { label: "INVOICED", value: formatMoney(invoiced), change: { percent: 6.3, direction: "up" } },
-          { label: "COLLECTED", value: formatMoney(collected.values[last]), change: { percent: 2.6, direction: "down" } },
-          { label: "UNPAID", value: formatMoney(unpaid.values[last]), change: { percent: 82.4, direction: "up" }, lowerIsBetter: true },
-          { label: "COLLECTION RATE", value: `${Math.round((collected.values[last] / invoiced) * 100)}%` },
+          { label: "INVOICED", value: formatMoney(invoiced) },
+          { label: "COLLECTED", value: formatMoney(collected.values[last]), change: metricChangeOf(data.cards.collected) },
+          { label: "UNPAID", value: formatMoney(unpaid.values[last]), lowerIsBetter: true },
+          { label: "COLLECTION RATE", value: invoiced ? `${Math.round((collected.values[last] / invoiced) * 100)}%` : "—" },
         ]}
       />
     </div>
@@ -563,7 +591,7 @@ const RevenueCard = () => {
 };
 
 // How clients are coming in: the number signed each month.
-const NewClientsCard = () => (
+const NewClientsCard = ({ data: { newClients } }: { data: DashboardOverviewData }) => (
   <div className={`${cardClass} px-5 pt-5 pb-5`}>
     <ChartHeader
       icon={Users}
@@ -571,30 +599,34 @@ const NewClientsCard = () => (
       tile="#e3e0f5"
       title="New Clients"
       sub="Clients signed each month"
-      headline="48"
+      headline={String(newClients.active)}
       headlineLabel="Active clients"
       href="/clients"
     />
 
     <div className="mt-6">
-      <ColumnChart series={SAMPLE_NEW_CLIENTS} format={String} tickFormat={String} height="h-48.5" />
+      <ColumnChart series={[{ name: "New clients", color: NEW_CLIENTS, values: newClients.byMonth }]} format={String} tickFormat={String} height="h-48.5" />
     </div>
 
     <MetricGrid
       metrics={[
-        { label: "THIS MONTH", value: "3" },
-        { label: "ONBOARDING", value: "4" },
-        { label: "CLOSED", value: "1", change: { percent: 50, direction: "down" }, lowerIsBetter: true },
+        { label: "THIS MONTH", value: String(newClients.thisMonth.value), change: metricChangeOf(newClients.thisMonth) },
+        { label: "ONBOARDING", value: String(newClients.onboarding) },
+        { label: "CLOSED", value: String(newClients.closed) },
       ]}
     />
   </div>
 );
 
 // Who still owes what. Every bar carries its amount, so nothing here depends on hovering.
-const UnpaidCard = () => {
-  const total = SAMPLE_UNPAID.reduce((sum, row) => sum + row.amount, 0);
-  const largest = Math.max(...SAMPLE_UNPAID.map((row) => row.amount));
-  const overdue = SAMPLE_UNPAID.filter((row) => row.overdueDays).reduce((sum, row) => sum + row.amount, 0);
+const UnpaidCard = ({ data: { unpaid } }: { data: DashboardOverviewData }) => {
+  const rows = [
+    ...unpaid.clients.map((row) => ({ key: row.client, name: row.companyName, amount: row.amount, waitingDays: row.waitingDays as number | undefined, declined: row.declined > 0 })),
+    ...(unpaid.others
+      ? [{ key: "others", name: `${unpaid.others.count} other client${unpaid.others.count === 1 ? "" : "s"}`, amount: unpaid.others.amount, waitingDays: undefined, declined: false }]
+      : []),
+  ];
+  const largest = Math.max(1, ...rows.map((row) => row.amount));
 
   return (
     <div className={`${cardClass} px-5 pt-5 pb-5`}>
@@ -603,45 +635,49 @@ const UnpaidCard = () => {
         color={UNPAID}
         tile="#fbe3d9"
         title="Unpaid Payments"
-        sub="Outstanding invoices by client"
-        headline={formatMoney(total)}
+        sub="Outstanding payments by client"
+        headline={formatMoney(unpaid.total)}
         headlineLabel="Outstanding"
         href="/payments"
       />
 
       <div className="mt-6 flex flex-col gap-3">
-        {SAMPLE_UNPAID.map((row, position) => (
-          <div key={row.client}>
-            <div className="mb-1.5 flex items-center gap-2 text-[12px]">
-              <span className="min-w-0 truncate font-semibold text-[#0b0c24]">{row.client}</span>
-              {row.overdueDays ? (
-                <span className="inline-flex shrink-0 items-center gap-1 rounded bg-[#fbe0e0] px-1.5 py-px text-[9.5px] font-semibold text-[#b91c1c]">
-                  <AlertCircle size={10} strokeWidth={2.5} /> Overdue {row.overdueDays}d
-                </span>
-              ) : row.dueInDays ? (
-                <span className="shrink-0 text-[10.5px] text-[#6b7280]">Due in {row.dueInDays}d</span>
-              ) : null}
-              <span className="ml-auto shrink-0 font-bold text-[#0b0c24] tabular-nums">{formatMoney(row.amount)}</span>
+        {rows.length ? (
+          rows.map((row, position) => (
+            <div key={row.key}>
+              <div className="mb-1.5 flex items-center gap-2 text-[12px]">
+                <span className="min-w-0 truncate font-semibold text-[#0b0c24]">{row.name}</span>
+                {row.declined ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 rounded bg-[#fbe0e0] px-1.5 py-px text-[9.5px] font-semibold text-[#b91c1c]">
+                    <AlertCircle size={10} strokeWidth={2.5} /> Declined
+                  </span>
+                ) : row.waitingDays !== undefined ? (
+                  <span className="shrink-0 text-[10.5px] text-[#6b7280]">{row.waitingDays ? `Waiting ${row.waitingDays}d` : "Today"}</span>
+                ) : null}
+                <span className="ml-auto shrink-0 font-bold text-[#0b0c24] tabular-nums">{formatMoney(row.amount)}</span>
+              </div>
+              <div className="h-2 rounded-full bg-[#f1f3f6]">
+                <div
+                  className="h-2 origin-left rounded-full motion-safe:animate-chart-grow-x"
+                  style={{
+                    width: `${(row.amount / largest) * 100}%`,
+                    background: `linear-gradient(90deg, ${tint(UNPAID, 58)}, ${UNPAID})`,
+                    animationDelay: `${position * 80}ms`,
+                  }}
+                />
+              </div>
             </div>
-            <div className="h-2 rounded-full bg-[#f1f3f6]">
-              <div
-                className="h-2 origin-left rounded-full motion-safe:animate-chart-grow-x"
-                style={{
-                  width: `${(row.amount / largest) * 100}%`,
-                  background: `linear-gradient(90deg, ${tint(UNPAID, 58)}, ${UNPAID})`,
-                  animationDelay: `${position * 80}ms`,
-                }}
-              />
-            </div>
-          </div>
-        ))}
+          ))
+        ) : (
+          <div className="rounded-xl bg-[#f7f8fa] px-4 py-8 text-center text-[12.5px] text-[#6b7280]">Nothing outstanding — every payment is in.</div>
+        )}
       </div>
 
       <MetricGrid
         metrics={[
-          { label: "OVERDUE", value: formatMoney(overdue) },
-          { label: "INVOICES", value: "11" },
-          { label: "CLIENTS", value: "8" },
+          { label: "DECLINED", value: formatMoney(unpaid.declined) },
+          { label: "PAYMENTS", value: String(unpaid.orders) },
+          { label: "CLIENTS", value: String(unpaid.clientCount) },
         ]}
       />
     </div>
@@ -696,41 +732,34 @@ const SideCard = ({
 );
 
 // Work waiting on the team: reports to review, content a client sent back, new project requests.
-type ReviewKind = "report" | "content" | "reel" | "project";
-type ReviewStatus = "review" | "revision" | "request";
-
-const REVIEW_ICONS: Record<ReviewKind, { icon: LucideIcon; background: string; color: string; href: string }> = {
-  report: { icon: FileText, background: "#dbe8fb", color: "#1877f2", href: "/monthly-reports" },
-  content: { icon: ImageIcon, background: "#d6ebdc", color: "#16a34a", href: "/content" },
-  reel: { icon: Clapperboard, background: "#f6dcdf", color: "#dc2626", href: "/content" },
-  project: { icon: Briefcase, background: "#f5e3c9", color: "#c8811f", href: "/projects" },
+// `page` follows the item's id: reports and projects open on their edit page (they have no other).
+const REVIEW_ICONS: Record<DashboardReviewKind, { icon: LucideIcon; background: string; color: string; href: string; page: string }> = {
+  report: { icon: FileText, background: "#dbe8fb", color: "#1877f2", href: "/monthly-reports", page: "/edit" },
+  content: { icon: ImageIcon, background: "#d6ebdc", color: "#16a34a", href: "/content", page: "" },
+  reel: { icon: Clapperboard, background: "#f6dcdf", color: "#dc2626", href: "/content", page: "" },
+  project: { icon: Briefcase, background: "#f5e3c9", color: "#c8811f", href: "/projects", page: "/edit" },
 };
 
-const REVIEW_PILLS: Record<ReviewStatus, { label: string; background: string; color: string; dot: string }> = {
+const REVIEW_PILLS: Record<DashboardReviewStatus, { label: string; background: string; color: string; dot: string }> = {
   review: { label: "In Review", background: "#fbecd3", color: "#a35a12", dot: "#d99136" },
   revision: { label: "Revision Requested", background: "#fbe0e0", color: "#b91c1c", dot: "#dc2626" },
   request: { label: "New Request", background: "#dce4f3", color: "#2f5fd8", dot: "#2f5fd8" },
 };
 
-const SAMPLE_REVIEWS: { kind: ReviewKind; title: string; sub: string; status: ReviewStatus }[] = [
-  { kind: "report", title: "Monthly Performance Report", sub: "Carter Injury Law", status: "review" },
-  { kind: "reel", title: "Reel — “Know Your Rights”", sub: "McCulloch Law P.A.", status: "revision" },
-  { kind: "project", title: "Website Redesign", sub: "Apex Advisor Group", status: "request" },
-  { kind: "content", title: "Blog — Dog Bite Claims Explained", sub: "Trip Law, P.A.", status: "revision" },
-  { kind: "report", title: "Weekly Report — Week 4", sub: "Tiki Travel Agency", status: "review" },
-];
+// Where "Review All" goes: the list with the most waiting on the team.
+const reviewAllHref = ({ reviews: { counts } }: DashboardOverviewData) =>
+  counts.content >= counts.reports && counts.content >= counts.projects
+    ? "/content?status=revision_requested"
+    : counts.projects > counts.reports
+      ? "/projects?status=new"
+      : "/monthly-reports?status=submitted";
 
-// `inDays` is counted from today when the page renders.
-const SAMPLE_MEETINGS = [
-  { inDays: 1, title: "Monthly Strategy Call", sub: "Carter Injury Law · 2:00 PM" },
-  { inDays: 3, title: "Social Media Review", sub: "McCulloch Law P.A. · 10:30 AM" },
-  { inDays: 6, title: "Website Redesign Kickoff", sub: "Apex Advisor Group · 11:00 AM" },
-  { inDays: 9, title: "Quarterly Campaign Review", sub: "Trip Law, P.A. · 4:00 PM" },
-];
+// A line under a list with nothing in it.
+const EmptyLine = ({ children }: { children: ReactNode }) => <div className="px-2 py-6 text-center text-[12px] text-[#6b7280]">{children}</div>;
 
 // ── The dashboard ────────────────────────────────────────────────────────────
 
-const DashboardOverview = ({ name }: { name: string }) => (
+const DashboardOverview = ({ name, data }: { name: string; data: DashboardOverviewData }) => (
   <>
     <div className="mt-1.5">
       <div className="text-[30px] leading-tight font-bold tracking-[-0.2px] text-[#0b0c24]">Welcome back{name ? `, ${name}` : ""}</div>
@@ -740,7 +769,7 @@ const DashboardOverview = ({ name }: { name: string }) => (
     </div>
 
     <div className="grid grid-cols-4 gap-4">
-      {SAMPLE_CARDS.map((card) => (
+      {headlineCards(data).map((card) => (
         <div className="rounded-xl border border-[#e6e8eb] bg-white px-4 pt-3.5 pb-4.5 shadow-[0_2px_6px_rgba(15,23,42,0.05)]" key={card.title}>
           <div className="mb-5 flex items-center gap-3">
             <span
@@ -775,10 +804,10 @@ const DashboardOverview = ({ name }: { name: string }) => (
 
     <div className="grid grid-cols-[minmax(0,2.7fr)_minmax(300px,1fr)] items-start gap-5">
       <div className="flex flex-col gap-4">
-        <RevenueCard />
+        <RevenueCard data={data} />
         <div className="grid grid-cols-2 gap-4">
-          <NewClientsCard />
-          <UnpaidCard />
+          <NewClientsCard data={data} />
+          <UnpaidCard data={data} />
         </div>
       </div>
 
@@ -788,38 +817,42 @@ const DashboardOverview = ({ name }: { name: string }) => (
           iconColor="#d97706"
           iconBackground="#f8e4c6"
           title="Needs Your Attention"
-          sub={`${SAMPLE_REVIEWS.length} items waiting on the team`}
-          count={SAMPLE_REVIEWS.length}
-          footer={{ href: "/monthly-reports?status=submitted", label: `Review All (${SAMPLE_REVIEWS.length})` }}
+          sub={`${data.reviews.total} item${data.reviews.total === 1 ? "" : "s"} waiting on the team`}
+          count={data.reviews.total}
+          footer={{ href: reviewAllHref(data), label: `Review All (${data.reviews.total})` }}
         >
-          {SAMPLE_REVIEWS.map((item) => {
-            const tile = REVIEW_ICONS[item.kind];
-            const pill = REVIEW_PILLS[item.status];
-            return (
-              <Link
-                href={tile.href}
-                key={`${item.title}-${item.sub}`}
-                className="flex items-center gap-3 rounded-xl px-2 py-2.5 text-inherit no-underline hover:bg-[#f7f8fa]"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: tile.background, color: tile.color }}>
-                  <tile.icon size={18} strokeWidth={1.9} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12.5px] font-bold text-[#0b0c24]">{item.title}</span>
-                  <span className="mt-0.5 flex items-center justify-between gap-2">
-                    <span className="truncate text-[11px] text-[#6b7280]">{item.sub}</span>
-                    <span
-                      className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-px text-[9.5px] font-semibold"
-                      style={{ background: pill.background, color: pill.color }}
-                    >
-                      <span className="h-1 w-1 rounded-full" style={{ background: pill.dot }} />
-                      {pill.label}
+          {data.reviews.items.length ? (
+            data.reviews.items.map((item) => {
+              const tile = REVIEW_ICONS[item.kind];
+              const pill = REVIEW_PILLS[item.status];
+              return (
+                <Link
+                  href={`${tile.href}/${item.id}${tile.page}`}
+                  key={`${item.kind}-${item.id}`}
+                  className="flex items-center gap-3 rounded-xl px-2 py-2.5 text-inherit no-underline hover:bg-[#f7f8fa]"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: tile.background, color: tile.color }}>
+                    <tile.icon size={18} strokeWidth={1.9} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12.5px] font-bold text-[#0b0c24]">{item.title}</span>
+                    <span className="mt-0.5 flex items-center justify-between gap-2">
+                      <span className="truncate text-[11px] text-[#6b7280]">{item.client}</span>
+                      <span
+                        className="inline-flex shrink-0 items-center gap-1 rounded px-1.5 py-px text-[9.5px] font-semibold"
+                        style={{ background: pill.background, color: pill.color }}
+                      >
+                        <span className="h-1 w-1 rounded-full" style={{ background: pill.dot }} />
+                        {pill.label}
+                      </span>
                     </span>
                   </span>
-                </span>
-              </Link>
-            );
-          })}
+                </Link>
+              );
+            })
+          ) : (
+            <EmptyLine>Nothing is waiting on the team.</EmptyLine>
+          )}
         </SideCard>
 
         <SideCard
@@ -828,23 +861,28 @@ const DashboardOverview = ({ name }: { name: string }) => (
           iconBackground="#dce4f3"
           title="Upcoming Meetings"
           sub="With your clients"
-          footer={{ href: "/calendar", label: `View All (${SAMPLE_MEETINGS.length})` }}
+          footer={{ href: "/calendar", label: `View All (${data.meetings.total})` }}
         >
-          {SAMPLE_MEETINGS.map((meeting) => {
-            const date = dayFromNow(meeting.inDays);
-            return (
-              <div className="flex items-center gap-3 rounded-xl px-2 py-2.5" key={meeting.title}>
-                <span className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl border border-[#eceef1] bg-[#f7f8fa]">
-                  <span className="text-[9px] leading-none font-semibold text-[#dc2626] uppercase">{date.month}</span>
-                  <span className="mt-0.5 text-[15px] leading-none font-bold text-[#0b0c24]">{date.day}</span>
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate text-[12.5px] font-bold text-[#0b0c24]">{meeting.title}</span>
-                  <span className="mt-0.5 block truncate text-[11px] text-[#6b7280]">{meeting.sub}</span>
-                </span>
-              </div>
-            );
-          })}
+          {data.meetings.items.length ? (
+            data.meetings.items.map((meeting) => {
+              const date = dateTile(meeting.startsAt);
+              const time = new Date(meeting.startsAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+              return (
+                <div className="flex items-center gap-3 rounded-xl px-2 py-2.5" key={meeting.id}>
+                  <span className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-xl border border-[#eceef1] bg-[#f7f8fa]">
+                    <span className="text-[9px] leading-none font-semibold text-[#dc2626] uppercase">{date.month}</span>
+                    <span className="mt-0.5 text-[15px] leading-none font-bold text-[#0b0c24]">{date.day}</span>
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-[12.5px] font-bold text-[#0b0c24]">{meeting.title}</span>
+                    <span className="mt-0.5 block truncate text-[11px] text-[#6b7280]">{[meeting.client, time].filter(Boolean).join(" · ")}</span>
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            <EmptyLine>No meetings coming up.</EmptyLine>
+          )}
         </SideCard>
       </div>
     </div>

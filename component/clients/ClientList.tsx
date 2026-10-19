@@ -44,13 +44,13 @@ const SEARCH_DELAY_MS = 400;
 
 // "Add Client" in the sidebar's dark navy, like "Add Content".
 const btnAddClient =
-  "inline-flex cursor-pointer items-center gap-1 whitespace-nowrap rounded-md bg-[#0b1522] px-5 py-2.75 text-[13px] font-bold text-white no-underline shadow-[0_1px_2px_rgba(11,21,34,0.2)] hover:bg-[#17263a]";
+  "inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg bg-[#0b1522] px-4 py-2.5 text-[13px] font-semibold text-white no-underline transition-colors hover:bg-[#17263a]";
 
 // ── One client ───────────────────────────────────────────────────────────────
 
 const cardButton =
-  "inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2.25 text-[12px] font-bold no-underline transition-colors duration-150";
-const cardLine = "flex min-w-0 items-center gap-2 text-[12px] text-[#556977]";
+  "inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-[12px] font-semibold no-underline transition-colors";
+const cardLine = "flex min-w-0 items-center gap-2 text-[12px] text-[#64748b]";
 
 // How far through the onboarding form the client is, as a percentage: the questions answered,
 // out of all of them (counted as the onboarding's own page counts them). A client who was never
@@ -60,34 +60,34 @@ const Progress = ({ client }: { client: Client }) => {
   const percent = total ? Math.round((answered / total) * 100) : 0;
 
   return (
-    <span className="inline-flex shrink-0 items-baseline gap-1.5">
-      Onboarding
-      <b className={`rounded-md px-1.5 py-0.5 text-[11.5px] font-bold tabular-nums ${percent === 100 ? "bg-[#e5f6ea] text-[#15803d]" : "bg-[#eef1ef] text-[#0d1e2c]"}`}>{percent}%</b>
+    <span className="inline-flex shrink-0 items-center gap-1.5">
+      <span>Onboarding</span>
+      <b className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${percent === 100 ? "bg-[#edf8f0] text-[#15803d]" : "bg-[#f1f5f9] text-[#475569]"}`}>{percent}%</b>
     </span>
   );
 };
 
 // `canManage` decides whether the card offers editing (the edit page turns everyone else away).
 const Card = ({ client, canManage }: { client: Client; canManage: boolean }) => (
-  <div className="flex flex-col rounded-xl border border-[#dbe3de] bg-white p-5 transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-[#c3d0c9] hover:shadow-[0_10px_28px_rgba(11,21,34,0.08)]">
+  <div className="flex min-h-[250px] flex-col rounded-xl border border-[#e2e8f0] bg-white p-4.5 transition-[border-color,box-shadow] duration-200 hover:border-[#cbd5e1] hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
     {/* Who it is: the company, with its contact under it, and where it stands. */}
     <div className="flex items-start gap-3">
       <div
-        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-[14px] font-bold text-white"
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[13px] font-bold text-white"
         style={{ background: avatarColorFor(client._id) }}
       >
         {initialsOf(client.companyName)}
       </div>
       <div className="min-w-0 flex-1 pt-0.5">
-        <div className="truncate text-[15px] leading-tight font-bold text-[#0d1e2c]" title={client.companyName}>
+        <div className="truncate text-[15px] leading-tight font-semibold text-[#0f172a]" title={client.companyName}>
           {client.companyName}
         </div>
-        <div className="mt-1 truncate text-[12px] text-[#7a8e9b]">{client.contactName}</div>
+        <div className="mt-1 truncate text-[12px] text-[#64748b]">{client.contactName}</div>
       </div>
       <span className={statusClassName(client.status)}>{statusLabel(client.status)}</span>
     </div>
 
-    <div className="mt-4 flex flex-col gap-1.5">
+    <div className="mt-4 flex flex-col gap-2 border-y border-[#f1f5f9] py-3.5">
       <span className={cardLine}>
         <Mail size={13} strokeWidth={2} className="shrink-0 text-[#8496a3]" />
         <span className="truncate" title={client.email}>
@@ -114,7 +114,7 @@ const Card = ({ client, canManage }: { client: Client; canManage: boolean }) => 
 
     {/* Pushed to the bottom, so the buttons line up across a row of cards of different heights. */}
     <div className="mt-auto pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 border-t border-[#eef3ef] pt-3.5 text-[11.5px] text-[#7a8e9b]">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-[11.5px] text-[#64748b]">
         <span className="inline-flex items-center gap-1.5">
           <Calendar size={12} strokeWidth={2} /> Client since {formatDate(client.startDate)}
         </span>
@@ -125,7 +125,7 @@ const Card = ({ client, canManage }: { client: Client; canManage: boolean }) => 
           <Eye size={13} strokeWidth={2.5} /> View client
         </Link>
         {canManage ? (
-          <Link href={`/clients/${client._id}/edit?from=list`} className={`${cardButton} border border-[#dbe3de] bg-white text-[#17242f] hover:border-[#2563eb] hover:text-[#2563eb]`}>
+          <Link href={`/clients/${client._id}/edit?from=list`} className={`${cardButton} border border-[#e2e8f0] bg-white text-[#334155] hover:border-[#93c5fd] hover:text-[#2563eb]`}>
             <Pencil size={12} strokeWidth={2.5} /> Edit client
           </Link>
         ) : null}
@@ -162,13 +162,13 @@ const Stats = ({ summary }: { summary: ClientListData["summary"] }) => {
   return (
     <div className={clientStatsGrid}>
       {stats.map((stat) => (
-        <div className={clientStatCard} key={stat.label}>
-          <div className={clientStatIcon} style={{ background: stat.iconBg, color: stat.iconColor }}>
-            <stat.icon size={18} strokeWidth={2} />
+        <div className={`${clientStatCard} border-[#e2e8f0]! shadow-none!`} key={stat.label}>
+          <div className={`${clientStatIcon} rounded-lg!`} style={{ background: stat.iconBg, color: stat.iconColor }}>
+            <stat.icon size={17} strokeWidth={2} />
           </div>
           <div>
             <div className={dashMetricLbl}>{stat.label}</div>
-            <div className="mb-2 text-[24px] font-bold text-[#0d1e2c]">{stat.value}</div>
+            <div className="mb-1 text-[23px] font-semibold text-[#0f172a]">{stat.value}</div>
             <div className={dashPendingSub}>{stat.note}</div>
           </div>
         </div>
@@ -232,27 +232,26 @@ const Toolbar = ({ status, search, summary }: { status: string; search: string; 
   ];
 
   return (
-    <div className="flex flex-wrap items-stretch justify-between gap-3">
-      <div className="flex gap-1.5 rounded-lg border border-[#dbe3de] bg-white p-1">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#e2e8f0] bg-white p-2">
+      <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-[#f8fafc] p-1">
         {tabs.map((tab) => (
           <Link
             key={tab.value}
             href={clientsHref({ status: tab.value, q: search })}
-            className={`cursor-pointer whitespace-nowrap rounded-md px-3.5 py-1.75 text-[12.5px] font-semibold no-underline ${
-              tab.value === status ? "bg-[#2563eb] text-white" : "text-[#64748b]"
+            className={`cursor-pointer whitespace-nowrap rounded-md px-3 py-1.75 text-[12px] font-medium no-underline transition-colors ${
+              tab.value === status ? "bg-white text-[#0f172a] shadow-[0_1px_2px_rgba(15,23,42,0.08)]" : "text-[#64748b] hover:text-[#0f172a]"
             }`}
           >
             {tab.label}
           </Link>
         ))}
       </div>
-      <div className="flex items-stretch gap-2.5">
-        {/* Built like the tab group beside it: an outer 8px frame around a 6px-rounded field. */}
+      <div className="flex w-full items-stretch sm:w-auto">
         <div
-          className="flex w-70 max-w-full flex-none items-center rounded-lg border border-[#dbe3de] bg-white p-1 focus-within:border-[#2563eb]"
+          className="flex w-full max-w-full flex-none items-center rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-1 transition-colors focus-within:border-[#93c5fd] focus-within:bg-white sm:w-70"
           role="search"
         >
-          <div className="flex flex-1 items-center gap-2 self-stretch rounded-md bg-[#f3f6f4] px-2.5">
+          <div className="flex flex-1 items-center gap-2 self-stretch rounded-md px-2.5">
             <span className={`${dashSearchIcon} inline-flex`}>
               <Search size={14} strokeWidth={2} />
             </span>
@@ -412,7 +411,7 @@ const ClientList = ({
         {data.clients.length === 0 ? (
           <EmptyState filtered={status !== "all" || search !== ""} canManage={canManage} />
         ) : (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
             {data.clients.map((client) => (
               <Card client={client} canManage={canManage} key={client._id} />
             ))}

@@ -111,6 +111,8 @@ export interface Client {
   onboarding?: OnboardingAnswers;
   // Populated objects on read, plain ids if not populated.
   user?: ClientLogin | string;
+  // The portal login's password, for those who manage clients — when it was kept readable.
+  portalPassword?: string;
   accountManager?: ClientStaff | string;
   team: (ClientStaff | string)[];
   createdBy?: string;

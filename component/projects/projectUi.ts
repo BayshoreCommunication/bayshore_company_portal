@@ -86,7 +86,8 @@ export const subscribeNever = () => () => {};
 export const formatDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 
-export const clientNameOf = (client: Project["client"]) => (typeof client === "object" ? client.companyName : "");
+// A project whose client was deleted comes back with `client: null`.
+export const clientNameOf = (client: Project["client"] | null) => (client && typeof client === "object" ? client.companyName : "");
 export const personNameOf = (person: unknown) =>
   person && typeof person === "object" && "fullName" in person ? String((person as { fullName: string }).fullName) : undefined;
 
