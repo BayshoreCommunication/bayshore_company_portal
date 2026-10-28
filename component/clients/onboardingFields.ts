@@ -40,8 +40,8 @@ const platform = (section: string, has: string, where: string, create: string): 
   { path: `${section}.wantsCreated`, label: create, kind: "yesno" },
 ];
 
-// A Google or social account.
-const account = (path: string, instagram = false): FieldDef[] => [
+// A Google account: shared with our access email, or its login.
+const account = (path: string): FieldDef[] => [
   { path: `${path}.has`, label: "Has an account", kind: "select", options: HAS },
   { path: `${path}.link`, label: "Link or name", kind: "text" },
   {
@@ -53,7 +53,6 @@ const account = (path: string, instagram = false): FieldDef[] => [
       ["secure", "Sharing the login"],
     ],
   },
-  ...(instagram ? [{ path: `${path}.connected`, label: "Connected to their Facebook Page", kind: "check" } as FieldDef] : []),
   { path: `${path}.loginUsername`, label: "Login username", kind: "text" },
   { path: `${path}.loginPassword`, label: "Login password", kind: "password", hint: "Only to change it. Stored encrypted." },
   { path: `${path}.accessGiven`, label: "Access given", kind: "check" },
@@ -61,8 +60,26 @@ const account = (path: string, instagram = false): FieldDef[] => [
   { path: `${path}.wantsCreated`, label: "Wants us to create it", kind: "yesno" },
 ];
 
+// A social account: access given on the platform itself (no password), as the client's form asks.
+const socialAccount = (path: string): FieldDef[] => [
+  { path: `${path}.has`, label: "Has an account", kind: "select", options: HAS },
+  { path: `${path}.link`, label: "Link or name", kind: "text" },
+  { path: `${path}.accessGiven`, label: "Access given (invited)", kind: "check" },
+  { path: `${path}.needsHelp`, label: "Needs help giving access", kind: "check" },
+  { path: `${path}.wantsCreated`, label: "Wants us to create it", kind: "yesno" },
+];
+
+// The business email: its login, through the secure form.
+const emailAccount = (path: string): FieldDef[] => [
+  { path: `${path}.has`, label: "Has a business email for us", kind: "select", options: HAS_TWO },
+  { path: `${path}.loginUsername`, label: "Business email address", kind: "text" },
+  { path: `${path}.loginPassword`, label: "Password", kind: "password", hint: "Only to change it. Stored encrypted." },
+];
+
 export const fieldsOf = (itemId: string): FieldDef[] => {
-  if (itemId.startsWith("google.") || itemId.startsWith("social.")) return account(itemId, itemId === "social.instagram");
+  if (itemId === "social.email") return emailAccount(itemId);
+  if (itemId.startsWith("social.")) return socialAccount(itemId);
+  if (itemId.startsWith("google.")) return account(itemId);
   if (itemId.startsWith("media.")) {
     return [
       {

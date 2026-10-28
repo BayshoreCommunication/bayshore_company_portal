@@ -408,8 +408,6 @@ const written = (value: string | number | undefined | null) => (value === undefi
 const having = (value?: "yes" | "no" | "unsure") => (value === "yes" ? "Yes" : value === "no" ? "No" : value === "unsure" ? "Not sure" : NONE);
 // A question answered yes or no — or not at all.
 const yesNo = (value?: boolean) => (value === undefined ? NONE : value ? "Yes" : "No");
-// A box that is either ticked or not.
-const ticked = (value?: boolean) => (value ? "Yes" : "No");
 const listed = (values?: string[]) => (values?.length ? values.join(", ") : NONE);
 
 // Where access to a platform stands, in one field: given, stuck, or still to do. "Needs help"
@@ -452,27 +450,39 @@ const platformStanding = (entry: NonNullable<OnboardingAnswers["domain"]>, creat
   return NOT_ANSWERED;
 };
 
-// The accounts we sign in to with their own login, typed on the client's form: the rest are
-// shared with our access email — or, for a Facebook Page, with our profile.
+// The accounts we sign in to with their own login, typed on the client's form (the business
+// email; the others only on older answers).
 const LOGIN_ACCOUNTS = ["instagram", "youtube", "linkedin", "tiktok", "x", "email"];
 
-// `facebook` is the client's Facebook Page, for the Instagram that rides on it: asked only to
-// post there, access to the Page is all the access there is to give.
-const accountItem = (id: string, name: string, account: OnboardingAccount = {}, facebook?: OnboardingAccount): Item => {
-  const viaFacebook = id === "instagram" && account.access === "invite";
+// How a social account's access is given on the platform itself — the client's form (Step 7)
+// walks them through it; no password. Google accounts are shared with our access email instead.
+const SOCIAL_GRANTS: Record<string, string> = {
+  facebook: "Partner access in Meta Business Suite (our Business ID)",
+  instagram: "Meta Business Suite → Instagram Accounts (our Business ID)",
+  youtube: "YouTube Studio invite to our Google account (Editor)",
+  linkedin: "LinkedIn Page admin — our profile as Content Admin",
+  tiktok: "TikTok Business Center partner access (our Business Center ID)",
+};
+
+// Where access stands, in the words the client sees: Pending (still to give), Invited (given —
+// ours to accept and check), Connected (a login shared). Verified is the team's tick on the item.
+const granted = (account: OnboardingAccount): Standing =>
+  account.accessGiven ? ["Invited — accept and verify", "ready"] : account.needsHelp ? ["Needs help giving access", "followup"] : ["Pending — waiting on access", "waiting"];
+
+const accountItem = (id: string, name: string, account: OnboardingAccount = {}): Item => {
+  const grant = SOCIAL_GRANTS[id];
+  const onPlatform = Boolean(grant) && account.access !== "secure";
   const standing: Standing =
     account.has === "yes"
-      ? viaFacebook
-        ? facebook?.accessGiven
-          ? ["Through their Facebook Page", "ready"]
-          : ["Waiting on access to their Facebook Page", "waiting"]
+      ? onPlatform
+        ? granted(account)
         : account.access === "invite"
           ? inviting(account)
           : account.access === "secure"
-            ? account.loginUsername && account.loginPassword
-              ? ["Login shared", "ready"]
+            ? account.loginUsername && (account.loginPassword || account.loginPasswordSet)
+              ? ["Connected — login shared", "ready"]
               : LOGIN_ACCOUNTS.includes(id)
-                ? ["Waiting for the login", "waiting"]
+                ? ["Pending — waiting for the login", "waiting"]
                 : ["Send a secure link for the login", "followup"]
             : ["Access not chosen yet", "waiting"]
       : account.has === "no"
@@ -492,20 +502,7 @@ const accountItem = (id: string, name: string, account: OnboardingAccount = {}, 
       ...(account.has === "yes"
         ? ([
             ["Link or name", written(account.link)],
-            // Only asked of Instagram.
-            ...(id === "instagram" ? ([["Already connected to their Facebook Page", ticked(account.connected)]] as Item["details"]) : []),
-            [
-              "How they give access",
-              viaFacebook
-                ? "Through their Facebook Page (posting only)"
-                : account.access === "invite"
-                  ? id === "facebook"
-                    ? "Adding our Facebook profile to their Page"
-                    : "Inviting our access email"
-                  : account.access === "secure"
-                    ? "Sharing the login"
-                    : NONE,
-            ],
+            ["How they give access", onPlatform ? grant : account.access === "invite" ? "Inviting our access email" : account.access === "secure" ? "Sharing the login" : NONE],
             // A login is only theirs to give when that is how they give access.
             ...(account.access === "secure"
               ? ([
@@ -513,9 +510,7 @@ const accountItem = (id: string, name: string, account: OnboardingAccount = {}, 
                   // The password itself is sealed and isn't shown; this says whether one was given.
                   ["Login password", account.loginPassword || account.loginPasswordSet ? "Saved (encrypted)" : NONE],
                 ] as Item["details"])
-              : []),
-            // Through the Facebook Page, access to the Page is the access: nothing of its own.
-            ...(viaFacebook ? [] : accessFields(account)),
+              : accessFields(account)),
           ] as Item["details"])
         : account.has === "no" || account.has === "unsure"
           ? ([["Wants us to create it", yesNo(account.wantsCreated)]] as Item["details"])
@@ -565,11 +560,11 @@ const GOOGLE_NAMES: Record<OnboardingGoogleAccount, string> = {
 // X (Twitter) is no longer on the client's form, so it isn't one of its items.
 const SOCIAL_NAMES: Record<Exclude<OnboardingSocialAccount, "x">, string> = {
   facebook: "Facebook Page",
-  instagram: "Instagram",
-  youtube: "YouTube",
+  instagram: "Instagram Business Account",
+  youtube: "YouTube Channel",
   linkedin: "LinkedIn Company Page",
-  tiktok: "TikTok",
-  email: "Email",
+  tiktok: "TikTok Account",
+  email: "Business Email",
 };
 const MEDIA_NAMES: Record<OnboardingMediaKind, string> = {
   professionalPhotos: "Professional photos",
@@ -742,7 +737,7 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
       ],
     },
     { id: "google", title: "Google accounts", items: namesOf(GOOGLE_NAMES).map(([key, name]) => accountItem(key, name, onboarding.google?.[key])) },
-    { id: "social", title: "Social media", items: namesOf(SOCIAL_NAMES).map(([key, name]) => accountItem(key, name, onboarding.social?.[key], onboarding.social?.facebook)) },
+    { id: "social", title: "Social media", items: namesOf(SOCIAL_NAMES).map(([key, name]) => accountItem(key, name, onboarding.social?.[key])) },
     { id: "media", title: "Photos and videos", items: namesOf(MEDIA_NAMES).map(([key, name]) => mediaItem(key, name, onboarding.media?.[key])) },
   ];
 };
