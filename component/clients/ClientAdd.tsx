@@ -1,11 +1,16 @@
 "use client";
 
-import { useId, useState, useSyncExternalStore, useTransition, type FormEvent, type ReactNode } from "react";
+import { useContext, createContext, useEffect, useRef, useId, useState, useSyncExternalStore, useTransition, type FormEvent, type ReactNode } from "react";
 import { Fraunces, Inter } from "next/font/google";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
+  Trash2,
+  Plus,
+  Loader2,
+  ArrowRight,
+  ChevronDown,
   ArrowLeft,
   Bell,
   BriefcaseBusiness,
@@ -71,7 +76,10 @@ import {
   todayInputValue,
   uploadsOf,
 } from "./clientUi";
-import OnboardingControls, { DEFAULT_NOT_NEEDED, tickedIn, ticksOf } from "./OnboardingControls";
+import { FileManager, type UploadKind } from "./OnboardingReview";
+import type { OnboardingFile } from "@/app/actions/onboarding";
+import { ONBOARDING_STEPS } from "./StepTicks";
+import { DEFAULT_NOT_NEEDED, tickedIn, ticksOf } from "./OnboardingControls";
 
 // The form a client is added with — and edited with: five parts (who they are, their
 // business, what they are buying, what is being taken over from them, and their contract and
@@ -88,7 +96,6 @@ const fraunces = Fraunces({ subsets: ["latin"] });
 
 // ── Looks ────────────────────────────────────────────────────────────────────
 
-const cardClass = "mb-5 overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white p-6 shadow-[0_5px_18px_rgba(15,23,42,0.035)] max-[640px]:p-4.5";
 const rowClass = "grid grid-cols-2 gap-4.5 max-[640px]:grid-cols-1";
 const labelClass = "mb-1.5 block text-[12.5px] font-semibold text-[#334155]";
 const smallLabelClass = "mb-1.5 block text-[12px] font-medium text-[#475569]";
@@ -217,26 +224,240 @@ const FIELD_ICONS: Record<string, LucideIcon> = {
   "Account manager": User,
   "Report delivery": Mail,
   "Portal password": ShieldCheck,
+  "Current portal password": ShieldCheck,
+  "Assigned staff": Users,
   "Confirm password": ShieldCheck,
   "What the client sees in their portal": Users,
   "Internal notes": StickyNote,
 };
 
-// One of the form's five parts.
-const Section = ({ icon, step, title, sub, children }: { icon: keyof typeof ICONS; step: number; title: ReactNode; sub: string; children: ReactNode }) => {
-  const tones = ["blue", "green", "amber", "purple", "slate"] as const;
-  return (
-  <section className={cardClass}>
-    <div className="mb-5 flex items-center gap-4 border-b border-[#eef2f7] pb-4.5">
-      <Icon name={icon} tone={tones[step - 1]} />
-      <div className="min-w-0">
-        <div className="mb-0.5 text-[10.5px] font-bold tracking-[0.08em] text-[#64748b] uppercase">Step {step} of 5</div>
-        <h2 className="text-[18px] leading-tight font-semibold text-[#0f172a]">{title}</h2>
-        <p className="mt-1 text-[13px] text-[#64748b]">{sub}</p>
+// The form's five parts, by step. Opened from a part's Edit on the client's page, every part is
+// there but only that one starts open; the others open when clicked. Without it, all are open.
+const SECTION_TITLES = ["Client information", "Business details", "Services and pricing", "Onboarding and transfer", "Account setup"];
+const OpenSteps = createContext<{ isOpen: (step: number) => boolean; toggle: (step: number) => void } | undefined>(undefined);
+
+// One custom service to fill in: its name, price, how often it is paid (with a deadline when it is
+// paid once), and what it includes. In the custom services list, and on a client's request
+// before it is added to it.
+const CustomServiceEditor = ({
+  custom,
+  change,
+  idPrefix,
+  onRemove,
+  footer,
+  tone = "border-[#e2e8f0]",
+}: {
+  custom: CustomService;
+  change: (patch: Partial<CustomService>) => void;
+  idPrefix: string;
+  onRemove?: () => void;
+  footer?: ReactNode;
+  tone?: string;
+}) => (
+    <div className={`rounded-lg border bg-white p-2.5 ${tone}`}>
+    {/* On one line: its name, price, how often it is paid, the deadline for one paid once, and remove. */}
+    <div
+      className={`grid items-center gap-2.5 max-[640px]:grid-cols-1 ${
+        custom.billing === "one_time"
+          ? onRemove
+            ? "grid-cols-[minmax(0,1fr)_130px_120px_160px_36px]"
+            : "grid-cols-[minmax(0,1fr)_130px_120px_160px]"
+          : onRemove
+            ? "grid-cols-[minmax(0,1fr)_140px_130px_36px]"
+            : "grid-cols-[minmax(0,1fr)_140px_130px]"
+      }`}
+    >
+      <input className={inputClass} placeholder="Service name, e.g. Landing page" aria-label="Service name" value={custom.name} maxLength={150} onChange={(event) => change({ name: event.target.value })} />
+      <NumberInput id={`${idPrefix}-price`} value={custom.price} onChange={(value) => change({ price: value })} dollars />
+      <select className={`${inputClass} cursor-pointer`} aria-label="How often it is paid" value={custom.billing} onChange={(event) => change({ billing: event.target.value as Billing })}>
+        <option value="monthly">Monthly</option>
+        <option value="one_time">One-time</option>
+      </select>
+      {custom.billing === "one_time" ? (
+        // Named inside the box, so the line stays one line.
+        <label className={`${fieldLook} flex cursor-pointer flex-col justify-center px-3 py-1 focus-within:border-[#2563eb] focus-within:bg-white focus-within:ring-3 focus-within:ring-[#2563eb]/12`}>
+          <span className="text-[10.5px] leading-tight font-semibold tracking-[0.04em] text-[#64748b] uppercase">Deadline</span>
+          <input type="date" className="w-full cursor-pointer border-0 bg-transparent p-0 text-[13.5px] leading-tight text-[#0f172a] outline-none" value={custom.deadline} onChange={(event) => change({ deadline: event.target.value })} />
+        </label>
+      ) : null}
+      {onRemove ? (
+        <button
+          type="button"
+          aria-label={`Remove ${custom.name || "this service"}`}
+          onClick={onRemove}
+          className="grid size-9 cursor-pointer place-items-center rounded-lg text-[#94a3b8] hover:bg-[#fef2f2] hover:text-[#dc2626]"
+        >
+          <Trash2 size={15} strokeWidth={2} />
+        </button>
+      ) : null}
+    </div>
+    {/* What the service covers: a list to tick, as for the services above. */}
+    <div className="mt-3 border-t border-[#f1f5f9] pt-3">
+      <div className={smallLabelClass}>What&apos;s included</div>
+      {custom.included.length ? (
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(230px,1fr))] gap-x-4 gap-y-0.5">
+          {custom.included.map((item, at) => (
+            <label key={`${item.text}-${at}`} className={tickClass}>
+              <input
+                type="checkbox"
+                checked={item.on}
+                onChange={(event) => change({ included: custom.included.map((old, position) => (position === at ? { ...old, on: event.target.checked } : old)) })}
+                className={checkboxClass}
+              />
+              {item.text}
+            </label>
+          ))}
+        </div>
+      ) : null}
+      <div className="mt-2 flex gap-2">
+        <input
+          className={`${smallInputClass} py-2 text-[14px]`}
+          placeholder="Add another item"
+          aria-label={`Add an item to ${custom.name || "this service"}`}
+          maxLength={150}
+          value={custom.draft}
+          onChange={(event) => change({ draft: event.target.value })}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            const item = custom.draft.trim();
+            if (item) change({ included: [...custom.included, { text: item, on: true }], draft: "" });
+          }}
+        />
+        <button
+          type="button"
+          className={addButtonClass}
+          onClick={() => {
+            const item = custom.draft.trim();
+            if (item) change({ included: [...custom.included, { text: item, on: true }], draft: "" });
+          }}
+        >
+          Add
+        </button>
       </div>
     </div>
-    {children}
-  </section>
+      {footer}
+    </div>
+);
+
+// Where a part stands, in its badge (as on the client's page — ClientDetails).
+type PartBadge = { label: string; tone: "done" | "partly" | "money" };
+const PART_BADGES = { done: "bg-[#dcfce7] text-[#15803d]", partly: "bg-[#eef2f7] text-[#475569]", money: "bg-[#dcfce7] text-[#15803d]" };
+export const filledBadge = (values: unknown[]): PartBadge => {
+  const filled = values.filter((value) => (Array.isArray(value) ? value.length > 0 : typeof value === "string" ? value.trim() !== "" : Boolean(value))).length;
+  return { label: `${filled} / ${values.length} filled`, tone: filled === values.length ? "done" : "partly" };
+};
+
+// One of the form's five parts, laid out as on the client's page: closed to a line — its step,
+// icon, name, a few of its answers and where it stands — and opened by clicking it, to edit.
+// With `href`, it is a link to a page of its own instead (the onboarding).
+const Section = ({
+  icon,
+  step,
+  title,
+  sub,
+  chips = [],
+  badge,
+  href,
+  onOpen,
+  busy = false,
+  children,
+}: {
+  icon: keyof typeof ICONS;
+  step: number;
+  title: ReactNode;
+  sub: string;
+  chips?: string[];
+  badge?: PartBadge;
+  href?: string;
+  // Instead of `href`: what clicking it does (save the form, then go to its page).
+  onOpen?: () => void;
+  busy?: boolean;
+  children?: ReactNode;
+}) => {
+  const tones = ["blue", "green", "amber", "purple", "slate"] as const;
+  const steps = useContext(OpenSteps);
+  const open = !href && !onOpen && (steps ? steps.isOpen(step) : true);
+  const bodyId = useId();
+  const shownChips = chips.map((chip) => chip.trim()).filter(Boolean);
+  const head = (
+    <>
+      <Icon name={icon} tone={tones[step - 1]} />
+      <div className="min-w-0 flex-1">
+        <div className="mb-0.5 text-[10.5px] font-bold tracking-[0.08em] text-[#64748b] uppercase">Step {step} of 5</div>
+        <h2 className="text-[17px] leading-tight font-bold text-[#0f172a]">{title}</h2>
+        {open || !shownChips.length ? (
+          <p className="mt-1 text-[12.5px] text-[#64748b]">{sub}</p>
+        ) : (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {shownChips.map((chip, index) => (
+              <span key={index} className="max-w-65 truncate rounded-md bg-[#f1f5f9] px-2 py-1 text-[12px] font-medium text-[#334155]" title={chip}>
+                {chip}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+      {badge ? <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-bold whitespace-nowrap tabular-nums ${PART_BADGES[badge.tone]}`}>{badge.label}</span> : null}
+    </>
+  );
+
+  if (onOpen) {
+    return (
+      <section id={`section-${step}`} className="mb-5 overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_4px_16px_rgba(15,23,42,0.035)] transition-shadow hover:shadow-[0_6px_20px_rgba(15,23,42,0.06)]">
+        <button type="button" onClick={onOpen} disabled={busy} className="group flex w-full cursor-pointer items-center gap-4 px-6 py-5 text-left disabled:cursor-wait max-[640px]:px-4.5">
+          {head}
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-[#e2e8f0] bg-white text-[#475569] transition-colors group-hover:border-[#2563eb] group-hover:text-[#2563eb]">
+            {busy ? <Loader2 size={17} className="animate-spin" /> : <ArrowRight size={17} strokeWidth={2.25} />}
+          </span>
+        </button>
+      </section>
+    );
+  }
+
+  if (href) {
+    return (
+      <section id={`section-${step}`} className="mb-5 overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_4px_16px_rgba(15,23,42,0.035)] transition-shadow hover:shadow-[0_6px_20px_rgba(15,23,42,0.06)]">
+        <Link href={href} className="group flex items-center gap-4 px-6 py-5 no-underline max-[640px]:px-4.5">
+          {head}
+          <span className="grid size-9 shrink-0 place-items-center rounded-lg border border-[#e2e8f0] bg-white text-[#475569] transition-colors group-hover:border-[#2563eb] group-hover:text-[#2563eb]">
+            <ArrowRight size={17} strokeWidth={2.25} />
+          </span>
+        </Link>
+      </section>
+    );
+  }
+
+  return (
+    <section
+      id={`section-${step}`}
+      className={`mb-5 scroll-mt-6 overflow-hidden rounded-2xl border bg-white transition-shadow ${
+        open ? "border-[#cfdcf3] shadow-[0_8px_24px_rgba(15,23,42,0.07)]" : "border-[#e2e8f0] shadow-[0_4px_16px_rgba(15,23,42,0.035)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.06)]"
+      }`}
+    >
+      <div className={`flex cursor-pointer items-center gap-4 px-6 py-5 max-[640px]:px-4.5 ${open ? "border-b border-[#eef2f7]" : ""}`} onClick={() => steps?.toggle(step)}>
+        {head}
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={bodyId}
+          aria-label={`${open ? "Close" : "Open"} ${SECTION_TITLES[step - 1]}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            steps?.toggle(step);
+          }}
+          className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-lg border border-[#e2e8f0] bg-white text-[#475569] transition-colors hover:border-[#2563eb] hover:text-[#2563eb]"
+        >
+          <ChevronDown size={17} strokeWidth={2.25} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+        </button>
+      </div>
+      {/* Grows and shrinks smoothly to its own height; closed, it stays filled in and is saved as it is. */}
+      <div id={bodyId} className={`grid transition-[grid-template-rows] duration-250 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+        <div className="min-h-0 overflow-hidden" inert={!open}>
+          <div className="px-6 pt-5 pb-6 max-[640px]:px-4.5">{children}</div>
+        </div>
+      </div>
+    </section>
   );
 };
 
@@ -392,6 +613,21 @@ const BLANK = {
 };
 type Answers = typeof BLANK;
 
+// A service the team names itself, priced each month or once.
+type Billing = "monthly" | "one_time";
+// What it covers is a list to tick, as for the services above: unticked items stay on the form
+// but aren't saved.
+// A one-time service has a deadline.
+type CustomService = {
+  key: string;
+  name: string;
+  price: string;
+  billing: Billing;
+  deadline: string;
+  included: { text: string; on: boolean }[];
+  draft: string;
+};
+
 // A choice that isn't on the list was typed in under "Other".
 const choiceOf = (saved: string | undefined, choices: string[]): [choice: string, other: string] => (!saved ? ["", ""] : choices.includes(saved) ? [saved, ""] : [OTHER, saved]);
 
@@ -541,11 +777,20 @@ const number = (value: string) => parseFloat(value) || 0;
 // Pass `client` to edit an existing one; leave it out to add a new one. `staff` are the team
 // members an account manager can be picked from. `backHref` is where Cancel goes, when not the
 // client's own page (or the list, for a new one).
-export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { client?: Client; staff?: StaffOption[]; backHref?: string }) => {
+export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onlyAsked }: { client?: Client; staff?: StaffOption[]; backHref?: string; only?: number }) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const id = useId();
   const isEdit = Boolean(client);
+  // The part opened from its Edit: for a client being edited, and a part the form has.
+  const only = client && onlyAsked && onlyAsked >= 1 && onlyAsked <= SECTION_TITLES.length ? onlyAsked : undefined;
+  // Which parts are open: the one asked for (and brought into view), or — for a new client — the
+  // first. The rest open when clicked.
+  const [openSteps, setOpenSteps] = useState<number[]>(only ? [only] : client ? [] : [1]);
+  const steps = { isOpen: (step: number) => openSteps.includes(step), toggle: (step: number) => setOpenSteps((now) => (now.includes(step) ? now.filter((at) => at !== step) : [...now, step])) };
+  useEffect(() => {
+    if (only) document.getElementById(`section-${only}`)?.scrollIntoView({ block: "start" });
+  }, [only]);
   const backHref = cancelHref ?? (client ? `/clients/${client._id}` : "/clients");
   const saved = client?.details;
 
@@ -565,20 +810,55 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
   // ── Step 2: the logo, which also decides two ticks in step 4 ──
   const [logo, setLogoAnswer] = useState<"yes" | "no">(() => (sharedOf(client).hasLogo === false ? "no" : "yes"));
   const [logoAdd, setLogoAddAnswer] = useState(saved?.business?.logoDesign?.add ?? true);
-  const [logoFiles, setLogoFiles] = useState<string[]>([]);
+  // The logo files on the client's record (uploaded by them, or by the team below), and what
+  // shows the style of one to be designed. Uploading saves them at once — only for a client
+  // already saved, as the files go onto its record.
+  const [logoFiles, setLogoFiles] = useState(() => client?.onboarding?.logo?.files ?? []);
+  const [logoStyleFiles, setLogoStyleFiles] = useState(() => client?.onboarding?.logo?.styleFiles ?? []);
+  const setUploads = (kind: UploadKind, files: OnboardingFile[]) => (kind === "logoStyle" ? setLogoStyleFiles(files) : setLogoFiles(files));
 
   // ── Step 3: services ──
   const [services, setServices] = useState<ServiceState[]>(() => servicesFor(client));
   // Services saved on the client that this form doesn't list: kept, so saving doesn't drop them.
-  const [otherServices, setOtherServices] = useState<string[]>(() => (client?.serviceTypes ?? []).filter((name) => !SERVICES.some((service) => service.name === name)));
+  // Services the team names itself (not on the list above): a name, a price, and whether it is
+  // paid each month or once. A service saved on the client with no price yet comes in too.
+  const [customs, setCustoms] = useState<CustomService[]>(() => {
+    const recorded = (client?.details?.services ?? []).filter((plan) => plan.custom);
+    const unpriced = (client?.serviceTypes ?? []).filter((name) => !SERVICES.some((service) => service.name === name) && !recorded.some((plan) => plan.name === name));
+    return [
+      ...recorded.map((plan) => ({
+        key: plan.name,
+        name: plan.name,
+        price: String(plan.oneTime || plan.monthly || ""),
+        billing: (plan.oneTime && !plan.monthly ? "one_time" : "monthly") as Billing,
+        deadline: plan.deadline ?? "",
+        included: (plan.included ?? []).map((text) => ({ text, on: true })),
+        draft: "",
+      })),
+      ...unpriced.map((name) => ({ key: name, name, price: "", billing: "monthly" as Billing, deadline: "", included: [], draft: "" })),
+    ];
+  });
+  const otherServices = customs.map((custom) => custom.name.trim()).filter(Boolean);
+  // The client's requests the team answers here, by id: added as a custom service, or set aside.
+  // Saved with the form.
+  const [answeredRequests, setAnsweredRequests] = useState<Record<string, "added" | "dismissed">>({});
+  // Open requests — but not one whose service the client already has, under the same name.
+  const takenNames = new Set([...(client?.details?.services ?? []).map((plan) => plan.name.trim().toLowerCase()), ...(client?.serviceTypes ?? []).map((name) => name.trim().toLowerCase())]);
+  const openRequests = (client?.serviceRequests ?? []).filter((request) => request.status === "open" && !takenNames.has(request.name.trim().toLowerCase()));
+  // Each open request filled in as a custom service before it is added: its name to start with.
+  const [requestDrafts, setRequestDrafts] = useState<Record<string, CustomService>>({});
+  const draftOf = (request: { _id: string; name: string }): CustomService =>
+    requestDrafts[request._id] ?? { key: `request-${request._id}`, name: request.name, price: "", billing: "one_time", deadline: "", included: [], draft: "" };
   const changeService = (index: number, change: (state: ServiceState) => ServiceState) => setServices((now) => now.map((state, at) => (at === index ? change(state) : state)));
 
   // ── Step 4: what they have, what they need, and what is being handed over ──
   // The step itself is now the onboarding controls (OnboardingControls.tsx): which steps and
   // items of the onboarding form this client needs — the rest are left off their form — and
   // which the account manager has approved.
-  const [notNeeded, setNotNeeded] = useState(() => ticksOf(client?.onboarding?.notNeeded ?? DEFAULT_NOT_NEEDED));
-  const [approved, setApproved] = useState(() => ticksOf(client?.onboarding?.approved));
+  // Which steps the client is asked is ticked on the onboarding page; the form sends it back as it was.
+  const [notNeeded] = useState(() => ticksOf(client?.onboarding?.notNeeded ?? DEFAULT_NOT_NEEDED));
+  // Approving is done on the onboarding page; the form sends it back as it was.
+  const [approved] = useState(() => ticksOf(client?.onboarding?.approved));
   // These are no longer asked on the form: they are held as they were saved — but for the
   // logo, which step 2 still decides — so that saving the client doesn't lose them.
   const [has, setHas] = useState<string[]>(() => saved?.transfer?.has ?? hasFrom(client) ?? ["logo"]);
@@ -635,14 +915,21 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
 
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
+  const formRef = useRef<HTMLFormElement>(null);
+  const toOnboarding = useRef(false);
+  const [openingOnboarding, setOpeningOnboarding] = useState(false);
+  // The staff assigned to the client, by id.
+  const [team, setTeam] = useState<string[]>(() => (client?.team ?? []).map((member) => (typeof member === "object" ? member._id : member)));
+  const [showCurrent, setShowCurrent] = useState(false);
 
   // The team to choose from — with the client's present manager among them even when the team
   // couldn't be listed, so that saving doesn't take them off.
   const present = client?.accountManager && typeof client.accountManager === "object" ? client.accountManager : undefined;
   const managers: [string, string][] = [...staff, ...(present && !staff.some((member) => member._id === present._id) ? [present] : [])].map((member) => [member._id, member.fullName]);
 
-  const monthly = services.reduce((sum, state, index) => (state.on ? sum + amountOf(state, index) : sum), 0);
-  const oneTime = logo === "no" && logoAdd ? parseFloat(answers.logoPrice) || 0 : 0;
+  const customTotal = (billing: Billing) => customs.reduce((sum, custom) => (custom.name.trim() && custom.billing === billing ? sum + (parseFloat(custom.price) || 0) : sum), 0);
+  const monthly = services.reduce((sum, state, index) => (state.on ? sum + amountOf(state, index) : sum), 0) + customTotal("monthly");
+  const oneTime = (logo === "no" && logoAdd ? parseFloat(answers.logoPrice) || 0 : 0) + customTotal("one_time");
   const hasWebsite = has.includes("website");
   const hasSocial = has.includes("social");
   const passwordsMatch = confirmPassword !== "" && confirmPassword === password;
@@ -652,14 +939,17 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
     event.preventDefault();
     setError(null);
     setFieldErrors([]);
+    // Whether this save was asked for on the way to the onboarding page (the part that opens it).
+    const thenOnboarding = toOnboarding.current;
+    toOnboarding.current = false;
 
     const refuse = (message: string) => {
       setError(message);
       toast.error(message);
+      setOpeningOnboarding(false);
     };
     const serviceTypes = [...SERVICES.filter((_, index) => services[index].on).map((service) => service.name), ...otherServices];
     if (methods.length === 0) return refuse("Select at least one way to communicate with the client.");
-    if (serviceTypes.length === 0) return refuse("Select at least one service.");
     if (changePassword && password !== confirmPassword) return refuse("Passwords do not match.");
 
     // Everything the form asks beyond the contact details, as the client's record keeps it.
@@ -685,7 +975,22 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
             addons: service.addons.map(([label], at) => ({ label, price: number(state.addons[at]) })),
           },
         ];
-      }),
+      }).concat(
+        customs
+          .filter((custom) => custom.name.trim())
+          .map((custom) => ({
+            name: custom.name.trim(),
+            fields: [],
+            monthly: custom.billing === "monthly" ? number(custom.price) : 0,
+            oneTime: custom.billing === "one_time" ? number(custom.price) : 0,
+            // When a one-time service is due, and how long it takes.
+            ...(custom.billing === "one_time" ? { deadline: custom.deadline || undefined } : {}),
+            // What it covers, with whatever was typed but not yet added.
+            included: [...custom.included.filter((item) => item.on).map((item) => item.text), ...(custom.draft.trim() ? [custom.draft.trim()] : [])],
+            addons: [],
+            custom: true,
+          })),
+      ),
       transfer: {
         has,
         needs: needs.filter((need) => need.on).map((need) => need.text),
@@ -721,7 +1026,26 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
     // In the menu's own order, whatever order they were ticked in.
     const portalMenus = PORTAL_MENUS.map(([key]) => key).filter((key) => menus.includes(key));
     const onboardingControls = { notNeeded: tickedIn(notNeeded), approved: tickedIn(approved) };
-    const input = { contactName, companyName, email, phone, address, serviceTypes, startDate, status, notes, portalMenus, details, shared, onboardingControls, accountManager: answers.accountManager || null };
+    const input = {
+      contactName,
+      companyName,
+      email,
+      phone,
+      address,
+      serviceTypes,
+      startDate,
+      status,
+      notes,
+      portalMenus,
+      details,
+      shared,
+      onboardingControls,
+      accountManager: answers.accountManager || null,
+      // Only when the staff could be listed: otherwise the team stays as it is.
+      ...(staff.length ? { team } : {}),
+      serviceRequestsAdded: Object.keys(answeredRequests).filter((requestId) => answeredRequests[requestId] === "added"),
+      serviceRequestsDismissed: Object.keys(answeredRequests).filter((requestId) => answeredRequests[requestId] === "dismissed"),
+    };
 
     startTransition(async () => {
       // A new client gets a login when requested; an existing client gets one only when the
@@ -734,9 +1058,13 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
         setError(result.error ?? "Something went wrong.");
         setFieldErrors(result.fieldErrors ?? []);
         toast.error(result.error ?? "Something went wrong.");
+        setOpeningOnboarding(false);
         return;
       }
 
+      const savedId = client?._id ?? (result.data && "client" in result.data ? result.data.client._id : undefined);
+      // On the way to the onboarding page, the save is quiet: the page itself is the next step.
+      if (thenOnboarding && savedId) return router.push(`/clients/${savedId}/onboarding?edit=1`);
       toast.success(client ? "Client updated successfully" : "Client created successfully");
       router.push(client ? `/clients/${client._id}` : "/clients");
     });
@@ -755,10 +1083,17 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
           <div className="min-w-0">
             <h1 className={`${fraunces.className} truncate text-[25px] leading-tight font-bold tracking-[-0.015em] text-[#0f172a] max-[640px]:text-[22px]`}>{isEdit ? companyName || "Edit Client" : "Add New Client"}</h1>
             <p className="mt-1 truncate text-[13px] text-[#64748b]">
-              {isEdit
-                ? [contactName, "Edit client record and portal settings"].filter(Boolean).join(" · ")
-                : "Set up a client record, services and portal access."}
+              {only
+                ? [contactName, `Editing ${SECTION_TITLES[only - 1]}`].filter(Boolean).join(" · ")
+                : isEdit
+                  ? [contactName, "Edit client record and portal settings"].filter(Boolean).join(" · ")
+                  : "Set up a client record, services and portal access."}
             </p>
+            {only && client ? (
+              <Link href={`/clients/${client._id}/edit`} className="mt-1.5 inline-block text-[12.5px] font-semibold text-[#2563eb] no-underline hover:underline">
+                Edit all sections
+              </Link>
+            ) : null}
           </div>
         </div>
         <Link href={backHref} className="inline-flex items-center gap-1.5 rounded-lg border border-[#dbe3ed] bg-white px-3.5 py-2 text-[13px] font-semibold text-[#475569] no-underline transition-colors hover:border-[#93c5fd] hover:bg-[#f8fbff] hover:text-[#2563eb]">
@@ -767,9 +1102,19 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
       </div>
 
       <div className="grid grid-cols-[minmax(0,1fr)_340px] items-start gap-7 max-[960px]:grid-cols-1">
-        <form onSubmit={handleSubmit}>
+        {/* With parts closed, a field left empty in one of them couldn't show the browser's own
+            "fill this in" bubble, so the backend's check (and the form's own) says what is missing instead. */}
+        <form ref={formRef} onSubmit={handleSubmit} noValidate>
+          <OpenSteps.Provider value={steps}>
           {/* 1. Client information */}
-          <Section icon="people" step={1} title="Client information" sub="The client's main contact details.">
+          <Section
+            icon="people"
+            step={1}
+            title="Client information"
+            sub="The client's main contact details."
+            chips={[contactName, companyName, email, phone]}
+            badge={filledBadge([contactName, companyName, email, phone, address, methods, answers.bestTime, answers.timeZone])}
+          >
             <div className={rowClass}>
               <Field label="Contact name" htmlFor={`${id}-contact`} required>
                 <input id={`${id}-contact`} className={inputClass} required placeholder="e.g. David Carter" value={contactName} onChange={(event) => setContactName(event.target.value)} />
@@ -818,7 +1163,14 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
           </Section>
 
           {/* 2. Business details */}
-          <Section icon="briefcase" step={2} title="Business details" sub="Fill in what you've collected from the client. You can add the rest later.">
+          <Section
+            icon="briefcase"
+            step={2}
+            title="Business details"
+            sub="Fill in what you've collected from the client. You can add the rest later."
+            chips={[answers.industry === OTHER ? answers.industryOther : answers.industry, answers.website, answers.serviceArea]}
+            badge={filledBadge([answers.industry, answers.businessType, answers.website, answers.gbp, answers.serviceArea, answers.audience, answers.competitors, answers.otherDetails])}
+          >
             <div className={rowClass}>
               <Field label="Industry" htmlFor={`${id}-industry`}>
                 <Select id={`${id}-industry`} value={answers.industry} onChange={put("industry")} options={INDUSTRIES} placeholder="Select industry" />
@@ -867,12 +1219,11 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
               />
               {logo === "yes" ? (
                 <div className={subBoxClass}>
-                  <label className={`${uploadClass} p-4.5`}>
-                    <input type="file" multiple hidden onChange={(event) => setLogoFiles(Array.from(event.target.files ?? []).map((file) => file.name))} />
-                    <strong className="font-bold text-[#2563eb]">Click to upload</strong> the logo, brand colors and fonts
-                    <br />
-                    <span className="text-[12px]">{logoFiles.length ? logoFiles.join(", ") : "PNG, SVG, PDF or ZIP · up to 20 MB"}</span>
-                  </label>
+                  {client ? (
+                    <FileManager clientId={client._id} kind="logo" title="Their logo" files={logoFiles} onChange={setUploads} />
+                  ) : (
+                    <p className="text-[12.5px] text-[#64748b]">Save the client first, then upload their logo here — or the client uploads it on their onboarding form.</p>
+                  )}
                 </div>
               ) : (
                 <div className={subBoxClass}>
@@ -890,6 +1241,12 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
                   <Field label="Style preferences" htmlFor={`${id}-logo-style`} small className="mt-3">
                     <input id={`${id}-logo-style`} className={smallInputClass} placeholder="Colors, logos they like, words that describe the brand" {...typed("logoStyle")} />
                   </Field>
+                  {/* What shows the style they'd like: logos they like, their colors, a sketch. */}
+                  {client ? (
+                    <div className="mt-3">
+                      <FileManager clientId={client._id} kind="logoStyle" title="Style they'd like" files={logoStyleFiles} onChange={setUploads} />
+                    </div>
+                  ) : null}
                 </div>
               )}
             </Field>
@@ -907,12 +1264,10 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
           <Section
             icon="dollar"
             step={3}
-            title={
-              <>
-                Services and pricing <Star />
-              </>
-            }
+            title="Services and pricing"
             sub="Select the services the client has agreed to, then set the quantity and price for each. Default prices are pre-filled and can be adjusted for this client."
+            chips={[...SERVICES.filter((_, index) => services[index]?.on).map((service) => service.name), ...otherServices]}
+            badge={{ label: `$${monthly.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo`, tone: "money" }}
           >
             {SERVICES.map((service, index) => {
               const state = services[index];
@@ -1004,16 +1359,140 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
               );
             })}
 
-            {/* Services already on the client that this form doesn't price. */}
-            {otherServices.map((name) => (
-              <div key={name} className="mb-3 overflow-hidden rounded-xl border border-[#2563eb] shadow-[0_0_0_3px_#e8effd]">
-                <label className="flex cursor-pointer items-center gap-3 px-4 py-3.5">
-                  <input type="checkbox" checked onChange={() => setOtherServices((now) => now.filter((other) => other !== name))} className="size-[18px] flex-none accent-[#2563eb]" />
-                  <span className="flex-1 font-semibold">{name}</span>
-                  <span className="text-[13px] font-medium text-[#6b7280]">Saved earlier</span>
-                </label>
+            {/* What the client asked for from their portal: one click adds it as a custom service below. */}
+            {openRequests.length ? (
+              <div className="mt-5 rounded-xl border border-[#fde68a] bg-[#fffbeb] p-4">
+                <div className="mb-3">
+                  <div className="text-[14px] font-bold text-[#0f172a]">Requested by the client</div>
+                  <div className="text-[12.5px] text-[#92400e]">Asked for from their portal. Set its price and what it includes, then add it to the services.</div>
+                </div>
+                <div className="flex flex-col gap-2.5">
+                  {openRequests.map((request) => {
+                    const answered = answeredRequests[request._id];
+                    const when = new Date(request.requestedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                    if (answered) {
+                      return (
+                        <div key={request._id} className="flex flex-wrap items-center gap-3 rounded-lg border border-[#fde68a] bg-white px-3 py-2.5">
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[13.5px] font-semibold text-[#0f172a]">{request.name}</div>
+                            <div className="text-[12px] text-[#64748b]">Requested {when}</div>
+                          </div>
+                          {answered === "added" ? (
+                            <span className="rounded-full bg-[#dcfce7] px-2.5 py-1 text-[12px] font-semibold text-[#15803d]">Added to the services below</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setAnsweredRequests((now) => {
+                                  const next = { ...now };
+                                  delete next[request._id];
+                                  return next;
+                                })
+                              }
+                              className="cursor-pointer text-[12.5px] font-semibold text-[#64748b] hover:text-[#0f172a]"
+                            >
+                              Dismissed · Undo
+                            </button>
+                          )}
+                        </div>
+                      );
+                    }
+                    const draft = draftOf(request);
+                    return (
+                      <div key={request._id}>
+                        <div className="mb-1.5 text-[12px] text-[#92400e]">
+                          Requested {when}
+                          {request.note ? ` · “${request.note}”` : ""}
+                        </div>
+                        <CustomServiceEditor
+                          custom={draft}
+                          idPrefix={`${id}-request-${request._id}`}
+                          tone="border-[#fde68a]"
+                          change={(patch) => setRequestDrafts((now) => ({ ...now, [request._id]: { ...draft, ...patch } }))}
+                          footer={
+                            <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-[#f1f5f9] pt-3">
+                              <button
+                                type="button"
+                                onClick={() => setAnsweredRequests((now) => ({ ...now, [request._id]: "dismissed" }))}
+                                className="h-9 cursor-pointer rounded-lg border border-[#e2e8f0] bg-white px-3.5 text-[13px] font-semibold text-[#64748b] hover:border-[#cbd5e1] hover:text-[#0f172a]"
+                              >
+                                Dismiss
+                              </button>
+                              <button
+                                type="button"
+                                disabled={!draft.name.trim()}
+                                onClick={() => {
+                                  setCustoms((now) => [...now, { ...draft, key: `request-${request._id}` }]);
+                                  setAnsweredRequests((now) => ({ ...now, [request._id]: "added" }));
+                                }}
+                                className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg bg-[#2563eb] px-3.5 text-[13px] font-semibold text-white hover:bg-[#1d4ed8] disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <Plus size={14} strokeWidth={2.5} /> Add to services
+                              </button>
+                            </div>
+                          }
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            ))}
+            ) : null}
+
+            {/* The team's own services: a name, a price, and whether it is paid each month or once.
+                A logo the client needs designed is one of them, from the logo answer (Business details). */}
+            <div className="mt-5 rounded-xl border border-[#e2e8f0] bg-[#fbfdff] p-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-[14px] font-bold text-[#0f172a]">Custom services</div>
+                  <div className="text-[12.5px] text-[#64748b]">Anything not on the list above, with its own price.</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setCustoms((now) => [...now, { key: `new-${Date.now()}`, name: "", price: "", billing: "one_time", deadline: "", included: [], draft: "" }])}
+                  className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-[#2563eb] bg-white px-3.5 text-[13px] font-semibold text-[#2563eb] hover:bg-[#eff6ff]"
+                >
+                  <Plus size={14} strokeWidth={2.5} /> Add custom service
+                </button>
+              </div>
+              <div className="flex flex-col gap-2.5">
+                {logo === "no" && logoAdd ? (
+                  <div className="grid grid-cols-[minmax(0,1fr)_140px_130px_36px] items-center gap-2.5 rounded-lg border border-[#bbf7d0] bg-white p-2.5 max-[640px]:grid-cols-1">
+                    <div className="flex min-w-0 items-center gap-2 px-1">
+                      <span className="truncate text-[13.5px] font-semibold text-[#0f172a]">Logo design</span>
+                      <span className="shrink-0 rounded-full bg-[#dcfce7] px-2 py-0.5 text-[10.5px] font-bold text-[#15803d]">
+                        {client?.onboarding?.logo?.wantsCreated ? "Asked for in onboarding" : "No logo yet"}
+                      </span>
+                    </div>
+                    <NumberInput id={`${id}-logo-design-price`} value={answers.logoPrice} onChange={put("logoPrice")} dollars />
+                    <span className="px-1 text-[13px] font-medium text-[#475569]">One-time</span>
+                    <button type="button" aria-label="Remove logo design" onClick={() => setLogoAdd(false)} className="grid size-9 cursor-pointer place-items-center rounded-lg text-[#94a3b8] hover:bg-[#fef2f2] hover:text-[#dc2626]">
+                      <Trash2 size={15} strokeWidth={2} />
+                    </button>
+                  </div>
+                ) : null}
+                {customs.map((custom, index) => (
+                  <CustomServiceEditor
+                    key={custom.key}
+                    custom={custom}
+                    idPrefix={`${id}-custom-${index}`}
+                    change={(patch) => setCustoms((now) => now.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)))}
+                    onRemove={() => {
+                      setCustoms((now) => now.filter((_, at) => at !== index));
+                      // Taken off again before saving: the client's request it came from is open again.
+                      if (custom.key.startsWith("request-")) {
+                        setAnsweredRequests((now) => {
+                          const next = { ...now };
+                          delete next[custom.key.slice("request-".length)];
+                          return next;
+                        });
+                      }
+                    }}
+                  />
+                ))}
+                {!customs.length && !(logo === "no" && logoAdd) ? <p className="text-[12.5px] text-[#94a3b8]">No custom services yet.</p> : null}
+              </div>
+            </div>
 
             <div className="mt-4 rounded-xl border border-[#86efac] bg-[#dcfce7] px-5 py-4 text-[#14532d]">
               <div className="flex items-center justify-between gap-3">
@@ -1029,17 +1508,31 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
           </Section>
 
           {/* 4. Onboarding and transfer */}
+          {/* The onboarding has a page of its own, where every answer is filled in and edited. Clicking
+              it saves what is on this form first (making the client, when adding one), then goes there. */}
           <Section
             icon="checklist"
             step={4}
             title="Onboarding and transfer"
-            sub="What this client's onboarding asks for, what they have given us, and what the account manager has approved."
-          >
-            <OnboardingControls client={client} about={{ contactName, companyName, email, phone }} off={notNeeded} setOff={setNotNeeded} approved={approved} setApproved={setApproved} />
-          </Section>
+            sub="Saves what you've entered here, then opens the onboarding page to fill everything in."
+            chips={[`${ONBOARDING_STEPS.filter(([stepId, , , locked]) => locked || !notNeeded[stepId]).length} of ${ONBOARDING_STEPS.length} steps`]}
+            onOpen={() => {
+              toOnboarding.current = true;
+              setOpeningOnboarding(true);
+              formRef.current?.requestSubmit();
+            }}
+            busy={isPending && openingOnboarding}
+          />
 
           {/* 5. Account setup */}
-          <Section icon="lock" step={5} title="Account setup" sub="Contract, billing, status and how the client gets updates.">
+          <Section
+            icon="lock"
+            step={5}
+            title="Account setup"
+            sub="Contract, billing, status and how the client gets updates."
+            chips={[startDate, answers.term ? `${answers.term} months` : "", endDate, answers.renewal]}
+            badge={filledBadge([startDate, answers.term, endDate, answers.renewal, answers.cancellation, answers.reminder, signed, payOnFile === "yes", answers.payMethod, answers.billingCycle, answers.billingDay, answers.setupFee, answers.accountManager, answers.delivery])}
+          >
             <h3 className="mb-3 text-[15px] font-bold">Contract</h3>
             <div className={rowClass}>
               <Field label="Contract start date" htmlFor={`${id}-start`} required>
@@ -1161,6 +1654,67 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
               <Select id={`${id}-delivery`} value={answers.delivery} onChange={put("delivery")} options={REPORT_DELIVERIES} disabled={portal || isEdit ? [] : [DELIVERY_PORTAL]} />
             </Field>
 
+            {/* Who else on the team works on the client: shown on its page as "Assigned staff". */}
+            <Field label="Assigned staff" hint={staff.length ? "Everyone ticked can see and work on this client." : "The team list couldn't be loaded, so the assigned staff stay as they are."}>
+              {staff.length ? (
+                <div className="flex flex-wrap gap-2">
+                  {staff.map((member) => {
+                    const on = team.includes(member._id);
+                    return (
+                      <label
+                        key={member._id}
+                        className={`inline-flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-1.5 text-[13px] font-medium transition-colors ${on ? "border-[#2563eb] bg-[#eff6ff] text-[#1d4ed8]" : "border-[#e2e8f0] bg-white text-[#334155] hover:border-[#93c5fd]"}`}
+                      >
+                        <input
+                          type="checkbox"
+                          className={checkboxClass}
+                          checked={on}
+                          onChange={(event) => setTeam((now) => (event.target.checked ? [...now, member._id] : now.filter((idOf) => idOf !== member._id)))}
+                        />
+                        {member.fullName}
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-[13px] text-[#334155]">{(client?.team ?? []).map((member) => (typeof member === "object" ? member.fullName : member)).join(", ") || "No one assigned yet"}</p>
+              )}
+            </Field>
+
+            {/* Their portal login as it is now: the password, hidden until shown, to copy. */}
+            {client?.user ? (
+              <Field label="Current portal password" hint={client.portalPassword ? "Type a new one below to replace it." : "It wasn't saved in a way that can be shown. Set a new one below to see it here."}>
+                {client.portalPassword ? (
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 font-mono text-[13.5px] break-all text-[#0f172a]">
+                      {showCurrent ? client.portalPassword : "••••••••"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCurrent((shown) => !shown)}
+                      className="h-9 shrink-0 cursor-pointer rounded-lg border border-[#e2e8f0] bg-white px-3 text-[12.5px] font-semibold text-[#475569] hover:border-[#93c5fd] hover:text-[#2563eb]"
+                    >
+                      {showCurrent ? "Hide" : "Show"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        navigator.clipboard.writeText(client.portalPassword ?? "").then(
+                          () => toast.success("Password copied"),
+                          () => toast.error("Couldn't copy the password."),
+                        )
+                      }
+                      className="h-9 shrink-0 cursor-pointer rounded-lg border border-[#e2e8f0] bg-white px-3 text-[12.5px] font-semibold text-[#475569] hover:border-[#93c5fd] hover:text-[#2563eb]"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                ) : (
+                  <p className="text-[13px] text-[#64748b]">Not saved</p>
+                )}
+              </Field>
+            ) : null}
+
             {/* The portal password: always shown. On a new client it creates their login (blank = no login);
                 on an existing one it sets or replaces it (blank = keep the current one). */}
             <div className={rowClass}>
@@ -1256,6 +1810,7 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref }: { clien
               />
             </Field>
           </Section>
+          </OpenSteps.Provider>
 
           {error ? (
             <div className={`${formErrorBanner} mb-4`} role="alert">

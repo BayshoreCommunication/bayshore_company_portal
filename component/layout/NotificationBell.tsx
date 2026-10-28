@@ -11,6 +11,7 @@ import {
   type NotificationListData,
 } from "@/app/actions/notifications";
 import { announceNotificationsChanged, kindOf, onNotificationsChanged, timeAgo } from "@/component/notifications/notificationUi";
+import { useRealtime } from "@/lib/realtime";
 
 // The bell in the top bar. Its badge is the number of unread notifications; pressing it
 // opens the latest ones, and showing them is what marks them read — the ones that were
@@ -92,6 +93,9 @@ const NotificationBell = ({ limit, initial }: { limit: number; initial?: Notific
   useEffect(() => {
     loadRef.current = load;
   });
+
+  // A new notification arrives live (backend → notifications:new): load it at once.
+  useRealtime("notifications:new", () => void loadRef.current());
 
   // News: now (unless the server already sent it), every half minute, and when the tab is looked at again.
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { auth } from "@/auth";
 import { getClientAction } from "@/app/actions/clients";
+import { listOnboardingCommentsAction } from "@/app/actions/onboarding";
 import ClientDetails from "@/component/clients/ClientDetails";
 import { canDeleteClients, canManageClients } from "@/component/clients/clientUi";
 import { formErrorBanner } from "@/component/shared/ui";
@@ -21,9 +22,16 @@ const ClientDetailPage = async ({ params }: { params: Promise<{ slug: string }> 
   }
 
   const role = session?.user?.role;
+  // The comments on their onboarding form, for the card beside the record.
+  const comments = result.data.onboarding?.status && result.data.user ? await listOnboardingCommentsAction(result.data._id) : undefined;
 
   return (
-    <ClientDetails client={result.data} canManage={canManageClients(role)} canDelete={canDeleteClients(role)} />
+    <ClientDetails
+      client={result.data}
+      canManage={canManageClients(role)}
+      canDelete={canDeleteClients(role)}
+      comments={comments?.ok ? comments.data : undefined}
+    />
   );
 };
 

@@ -11,6 +11,7 @@ const KINDS: Record<NotificationType, Kind> = {
   content_caption_edited: { label: "Caption edited", icon: PencilLine, color: "#2563eb", background: "#dbeafe" },
   // The client's side of the conversation — listed so an unexpected one still looks right.
   content_comment: { label: "Reply", icon: MessageSquareText, color: "#7c3aed", background: "#ede9fe" },
+  onboarding_comment: { label: "Onboarding comment", icon: MessageSquareText, color: "#2f5fd8", background: "#e8effd" },
   content_sent: { label: "Sent for approval", icon: SendHorizontal, color: "#d97706", background: "#fdf1de" },
   content_resubmitted: { label: "Re-submitted", icon: RotateCcw, color: "#d97706", background: "#fdf1de" },
 };

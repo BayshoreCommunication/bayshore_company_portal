@@ -18,6 +18,11 @@ export type OnboardingHas = "yes" | "no" | "unsure";
 // A platform we need to get into: which one, and whether access has been given.
 interface OnboardingPlatform {
   platform?: string;
+  // Inviting our access email, or sharing the login (stored sealed; never shown).
+  access?: "invite" | "secure";
+  loginUsername?: string;
+  loginPassword?: string;
+  loginPasswordSet?: boolean;
   accessGiven?: boolean;
   needsHelp?: boolean;
 }
@@ -46,6 +51,8 @@ export interface OnboardingAccount {
   // never shown: here it only says that there is one.
   loginUsername?: string;
   loginPassword?: string;
+  // After the team saves answers, a stored password comes back only flagged.
+  loginPasswordSet?: boolean;
 }
 
 // One kind of photos or videos.
@@ -97,7 +104,8 @@ export interface OnboardingAnswers {
     leadSources?: string[];
   };
   // Whether they say they booked the kickoff call.
-  kickoffCall?: { booked?: boolean };
+  // `bookedAt` is when the client first said so (set by the backend).
+  kickoffCall?: { booked?: boolean; bookedAt?: string };
   website?: {
     url?: string;
     hasNone?: boolean;
@@ -109,7 +117,8 @@ export interface OnboardingAnswers {
   };
   domain?: OnboardingPlatform & { has?: OnboardingHas; name?: string; wantsCreated?: boolean; wishlist?: string };
   hosting?: OnboardingPlatform & { has?: OnboardingHas; wantsCreated?: boolean };
-  cms?: OnboardingPlatform & { developer?: string };
+  // `has`: whether the website is built on a CMS. `giving`: with one, what they let us into.
+  cms?: OnboardingPlatform & { has?: OnboardingHas; giving?: "cms" | "hosting" | "both"; developer?: string };
   // Their business email — not the contact's own email.
   email?: { has?: OnboardingYesNo; provider?: string; wantsCreated?: boolean; accounts?: number; addresses?: string };
   // `files` are what the client uploaded; `link` is a shared folder instead of, or with, them.
@@ -207,6 +216,108 @@ export async function getOnboardingRequestAction(id: string): Promise<Onboarding
     if (!response.ok) return failure(response, "Failed to fetch this onboarding request.");
 
     const { data } = await response.json();
+    return { ok: true, data };
+  } catch {
+    return NETWORK_ERROR;
+  }
+}
+
+// ── Comments on a client's onboarding form ───────────────────────────────────
+
+// What the client wrote on a step of their onboarding form, and the team's replies (backend:
+// models/onboardingComment.model.ts). `step` is the step's id on the client's form ("domain");
+// this portal's steps carry it as "step:domain". Comments and replies carry files, so they go
+// through the upload routes (app/api/onboarding/comments/[clientId]/…).
+export interface OnboardingCommentFile {
+  url: string;
+  name: string;
+  size: number;
+  mimeType: string;
+}
+export interface OnboardingCommentReply {
+  _id: string;
+  authorName: string;
+  text: string;
+  files: OnboardingCommentFile[];
+  createdAt: string;
+}
+export interface OnboardingComment {
+  _id: string;
+  step: string;
+  // Who wrote it: the client, or the team (started from the client's page). Missing means the client.
+  side?: "client" | "team";
+  authorName: string;
+  text: string;
+  files: OnboardingCommentFile[];
+  createdAt: string;
+  replies: OnboardingCommentReply[];
+}
+
+export async function listOnboardingCommentsAction(clientId: string): Promise<OnboardingActionResult<OnboardingComment[]>> {
+  const accessToken = await token();
+  if (!accessToken) return NOT_SIGNED_IN;
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/onboarding/clients/${clientId}/comments`, { headers: { Authorization: `Bearer ${accessToken}` }, cache: "no-store" });
+    if (!response.ok) return failure(response, "Couldn't load the client's comments.");
+    const { data } = (await response.json()) as { data: OnboardingComment[] };
+    return { ok: true, data };
+  } catch {
+    return NETWORK_ERROR;
+  }
+}
+
+// The team fills in or corrects a client's onboarding answers (backend: PATCH
+// /onboarding/clients/:clientId). Each section sent replaces the one stored. Back come the
+// client's answers, with a stored password only flagged (`loginPasswordSet`), never sent.
+export async function updateClientOnboardingAction(clientId: string, answers: Record<string, unknown>): Promise<OnboardingActionResult<{ onboarding: OnboardingAnswers }>> {
+  const accessToken = await token();
+  if (!accessToken) return NOT_SIGNED_IN;
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/onboarding/clients/${clientId}`, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ answers }),
+    });
+    if (!response.ok) return failure(response, "Couldn't save the answers.");
+    const { data } = (await response.json()) as { data: { onboarding: OnboardingAnswers } };
+    return { ok: true, data };
+  } catch {
+    return NETWORK_ERROR;
+  }
+}
+
+// One password a client shared on their onboarding form (backend: GET
+// /onboarding/clients/:clientId/password), opened on request for those who manage clients.
+// `login` is where it is kept: "hosting", "cms", "domain", or an account like "google.ads".
+export async function revealOnboardingPasswordAction(clientId: string, login: string): Promise<OnboardingActionResult<{ password: string }>> {
+  const accessToken = await token();
+  if (!accessToken) return NOT_SIGNED_IN;
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/onboarding/clients/${clientId}/password?login=${encodeURIComponent(login)}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+    if (!response.ok) return failure(response, "Couldn't show the password.");
+    const { data } = (await response.json()) as { data: { password: string } };
+    return { ok: true, data };
+  } catch {
+    return NETWORK_ERROR;
+  }
+}
+
+// The team taking one of a client's uploaded onboarding files off (backend: DELETE
+// /onboarding/clients/:clientId/media/:kind). Back come the files left for that kind.
+export async function removeClientOnboardingFileAction(clientId: string, kind: string, url: string): Promise<OnboardingActionResult<{ files: OnboardingFile[] }>> {
+  const accessToken = await token();
+  if (!accessToken) return NOT_SIGNED_IN;
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/onboarding/clients/${clientId}/media/${kind}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!response.ok) return failure(response, "Couldn't remove the file.");
+    const { data } = (await response.json()) as { data: { files: OnboardingFile[] } };
     return { ok: true, data };
   } catch {
     return NETWORK_ERROR;

@@ -1,16 +1,26 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
   AlertTriangle,
+  ArrowRight,
   ArrowUpRight,
+  ChartBar,
+  CircleCheck,
+  CircleHelp,
+  CircleMinus,
+  Megaphone,
+  SearchCheck,
+  ThumbsUp,
   Bell,
   Briefcase,
   Building2,
   Calendar,
+  CalendarCheck,
+  CalendarClock,
   Camera,
   Check,
   ChevronDown,
@@ -23,6 +33,7 @@ import {
   EyeOff,
   FileText,
   Globe,
+  Layers,
   LayoutGrid,
   Link2,
   Loader2,
@@ -47,7 +58,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { deleteClientAction, updateClientAction, type Client, type ClientLogin, type ClientStatus } from "@/app/actions/clients";
-import type { OnboardingAnswers, OnboardingFile, OnboardingRequest } from "@/app/actions/onboarding";
+import type { OnboardingAnswers, OnboardingComment, OnboardingFile, OnboardingRequest } from "@/app/actions/onboarding";
 import {
   CLIENT_HAS,
   CLIENT_STATUS_OPTIONS,
@@ -84,6 +95,9 @@ import {
   type Item,
   type Tone,
 } from "./clientUi";
+import { CALENDAR_URL } from "@/lib/booking";
+import OnboardingComments from "./OnboardingComments";
+import { DEFAULT_NOT_NEEDED } from "./OnboardingControls";
 import {
   breadcrumbLink,
   breadcrumbRow,
@@ -205,29 +219,278 @@ const Rows = ({ rows }: { rows: Row[] }) => (
   </div>
 );
 
-// One of the form's five parts: its icon and name as the form has them, and — for those who
-// can — the way to the form to change it.
-const Section = ({ icon: Icon, title, sub, editHref, children }: { icon: LucideIcon; title: string; sub: string; editHref?: string; children: ReactNode }) => (
-  <section className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_4px_16px_rgba(15,23,42,0.035)]">
-    <div className="flex items-center justify-between gap-3 border-b border-[#eef2f7] bg-[#fbfdff] px-5 py-4 sm:px-5.5">
-      <div className="flex min-w-0 items-center gap-3.5">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eaf2ff] text-[#2563eb]">
-          <Icon size={19} strokeWidth={2} />
-        </span>
-        <div className="min-w-0">
-          <h2 className="text-[15.5px] leading-tight font-semibold text-[#0f172a]">{title}</h2>
-          <p className="mt-0.5 text-[12px] text-[#64748b]">{sub}</p>
+// The colors of each part's icon.
+const TINTS = {
+  blue: "bg-[#eaf2ff] text-[#2563eb]",
+  green: "bg-[#e7f6ec] text-[#15803d]",
+  amber: "bg-[#fef3e2] text-[#d97706]",
+  violet: "bg-[#f1ebfe] text-[#7c3aed]",
+  rose: "bg-[#fde7ef] text-[#db2777]",
+  slate: "bg-[#f1f5f9] text-[#475569]",
+};
+// Where a part stands, in its badge: done, part of the way, or money.
+const BADGES = {
+  done: "bg-[#dcfce7] text-[#15803d]",
+  partly: "bg-[#eef2f7] text-[#475569]",
+  pending: "bg-[#fef3c7] text-[#92400e]",
+  money: "bg-[#dcfce7] text-[#15803d]",
+};
+type Badge = { label: string; tone: keyof typeof BADGES };
+
+// How many of a part's fields hold something, as its badge says it.
+const filledOf = (rows: Row[]): Badge => {
+  const filled = rows.filter((row) => row.content || row.value?.trim()).length;
+  return { label: `${filled} / ${rows.length} filled`, tone: filled === rows.length ? "done" : "partly" };
+};
+// A few of a part's values, to read it by while it is closed.
+const chipsOf = (values: (string | null | undefined)[]) => values.map((value) => value?.trim()).filter((value): value is string => Boolean(value));
+
+// One of the form's parts, closed to a line until it is clicked: its step, icon and name, a few
+// of its values, and where it stands. Open, it shows everything — and, for those who can, the
+// way to the form to change it.
+const Section = ({
+  icon: Icon,
+  title,
+  sub,
+  editHref,
+  step,
+  steps,
+  tint,
+  chips,
+  badge,
+  open,
+  onToggle,
+  href,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  sub: string;
+  editHref?: string;
+  step: number;
+  steps: number;
+  tint: keyof typeof TINTS;
+  chips: string[];
+  badge?: Badge;
+  open: boolean;
+  onToggle: () => void;
+  // A part with a page of its own: clicking it goes there instead of opening it here.
+  href?: string;
+  children?: ReactNode;
+}) => {
+  const bodyId = useId();
+  if (href) {
+    return (
+      <section className="overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_4px_16px_rgba(15,23,42,0.035)] transition-shadow hover:shadow-[0_6px_20px_rgba(15,23,42,0.06)]">
+        <h2>
+          <Link href={href} className="group flex items-center gap-4 px-5 py-4 no-underline sm:px-5.5">
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${TINTS[tint]}`}>
+              <Icon size={20} strokeWidth={2} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[10.5px] font-bold tracking-[0.08em] text-[#64748b] uppercase">
+                Step {step} of {steps}
+              </span>
+              <span className="mt-0.5 block text-[17px] leading-tight font-bold text-[#0f172a]">{title}</span>
+              {chips.length ? (
+                <span className="mt-2 flex flex-wrap gap-1.5">
+                  {chips.map((chip, index) => (
+                    <span key={index} className="max-w-65 truncate rounded-md bg-[#f1f5f9] px-2 py-1 text-[12px] font-medium text-[#334155]" title={chip}>
+                      {chip}
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <span className="mt-1 block text-[12.5px] font-normal text-[#64748b]">{sub}</span>
+              )}
+            </span>
+            {badge ? <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11.5px] font-bold whitespace-nowrap tabular-nums ${BADGES[badge.tone]}`}>{badge.label}</span> : null}
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-[#e2e8f0] bg-white text-[#475569] transition-colors group-hover:border-[#2563eb] group-hover:text-[#2563eb]">
+              <ArrowRight size={16} strokeWidth={2.25} />
+            </span>
+          </Link>
+        </h2>
+      </section>
+    );
+  }
+  return (
+    <section className={`overflow-hidden rounded-2xl border bg-white transition-shadow ${open ? "border-[#cfdcf3] shadow-[0_8px_24px_rgba(15,23,42,0.07)]" : "border-[#e2e8f0] shadow-[0_4px_16px_rgba(15,23,42,0.035)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.06)]"}`}>
+      <div className="flex items-center gap-3 px-5 py-4 sm:px-5.5">
+        <h2 className="min-w-0 flex-1">
+          <button type="button" aria-expanded={open} aria-controls={bodyId} onClick={onToggle} className="flex w-full min-w-0 cursor-pointer items-center gap-4 text-left">
+            <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${TINTS[tint]}`}>
+              <Icon size={20} strokeWidth={2} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[10.5px] font-bold tracking-[0.08em] text-[#64748b] uppercase">
+                Step {step} of {steps}
+              </span>
+              <span className="mt-0.5 block text-[17px] leading-tight font-bold text-[#0f172a]">{title}</span>
+              {open || !chips.length ? (
+                <span className="mt-1 block text-[12.5px] font-normal text-[#64748b]">{sub}</span>
+              ) : (
+                <span className="mt-2 flex flex-wrap gap-1.5">
+                  {chips.map((chip, index) => (
+                    <span key={index} className="max-w-65 truncate rounded-md bg-[#f1f5f9] px-2 py-1 text-[12px] font-medium text-[#334155]" title={chip}>
+                      {chip}
+                    </span>
+                  ))}
+                </span>
+              )}
+            </span>
+          </button>
+        </h2>
+        <div className="flex shrink-0 items-center gap-2.5 max-sm:flex-col-reverse max-sm:items-end">
+          {editHref && open ? (
+            <Link href={editHref} className={`${btnDraft} ${iconText}`}>
+              <Pencil size={12} strokeWidth={2} /> Edit
+            </Link>
+          ) : null}
+          {badge ? <span className={`rounded-full px-2.5 py-1 text-[11.5px] font-bold whitespace-nowrap tabular-nums ${BADGES[badge.tone]}`}>{badge.label}</span> : null}
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-hidden
+            onClick={onToggle}
+            className="grid size-8 cursor-pointer place-items-center rounded-lg border border-[#e2e8f0] bg-white text-[#475569] transition-colors hover:border-[#2563eb] hover:text-[#2563eb]"
+          >
+            <ChevronDown size={16} strokeWidth={2.25} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+          </button>
         </div>
       </div>
-      {editHref ? (
-        <Link href={editHref} className={`${btnDraft} ${iconText}`}>
-          <Pencil size={12} strokeWidth={2} /> Edit
-        </Link>
-      ) : null}
+      {/* Grows and shrinks smoothly to its own height. */}
+      <div id={bodyId} className={`grid transition-[grid-template-rows] duration-250 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+        <div className="min-h-0 overflow-hidden" inert={!open}>
+          <div className="border-t border-[#eef2f7] px-5 py-5 sm:px-5.5">{children}</div>
+        </div>
+      </div>
+    </section>
+  );
+};
+
+// Whether the client has booked their onboarding call with us — their own word, as the booking
+// calendar doesn't tell us — and the calendar, which is where to see when it is. In Client
+// information (RecordSections).
+const OnboardingCall = ({ call }: { call?: NonNullable<Client["onboarding"]>["kickoffCall"] }) => (
+  <div className={`rounded-xl border p-4 ${call?.booked ? "border-[#bbf7d0] bg-[#f0fdf4]" : "border-[#fde68a] bg-[#fffbeb]"}`}>
+    <div className="flex items-center gap-3">
+      <span
+        className={`grid size-10 shrink-0 place-items-center rounded-xl ${call?.booked ? "bg-[#16a34a] text-white" : "bg-[#fef3c7] text-[#b45309]"}`}
+      >
+        {call?.booked ? <CalendarCheck size={19} strokeWidth={2} /> : <CalendarClock size={19} strokeWidth={2} />}
+      </span>
+      <div className="min-w-0">
+        <div className="text-[11px] font-bold tracking-[0.06em] text-[#64748b] uppercase">Onboarding call</div>
+        <div className={`text-[15px] font-bold ${call?.booked ? "text-[#15803d]" : "text-[#b45309]"}`}>
+          {call?.booked ? "Booked" : "Not booked yet"}
+        </div>
+      </div>
     </div>
-    <div className="px-5 py-5 sm:px-5.5">{children}</div>
-  </section>
+    <p className="mt-2.5 text-[12.5px] leading-normal text-[#475569]">
+      {call?.booked
+        ? `The client says they booked it${call.bookedAt ? ` on ${formatDate(call.bookedAt)}` : ""}. The date and time are in the booking calendar.`
+        : "The client hasn't said they booked it. Their onboarding emails remind them."}
+    </p>
+    <a
+      href={CALENDAR_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#d1d5db] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#334155] no-underline transition-colors hover:border-[#93c5fd] hover:text-[#2563eb]"
+    >
+      <Calendar size={14} strokeWidth={2} /> Open the booking calendar <ArrowUpRight size={12} strokeWidth={2.25} />
+    </a>
+  </div>
 );
+
+// The accounts a client says they have, as they answered when signing up (and on their
+// onboarding form since): each with whether they have it, its link, and — where they don't —
+// whether we are to make it. Beside Client information (RecordSections).
+const SIGNUP_ACCOUNTS: [section: "google" | "social", key: string, name: string, icon: LucideIcon][] = [
+  ["google", "businessProfile", "Google Business Profile", MapPin],
+  ["google", "analytics", "Google Analytics", ChartBar],
+  ["google", "searchConsole", "Google Search Console", SearchCheck],
+  ["google", "ads", "Google Ads", Megaphone],
+  ["social", "facebook", "Facebook Page", ThumbsUp],
+  ["social", "instagram", "Instagram", Camera],
+  ["social", "linkedin", "LinkedIn", Briefcase],
+  ["social", "metaAds", "Meta Ads", Target],
+];
+type AccountAnswer = { has?: "yes" | "no" | "unsure"; link?: string; wantsCreated?: boolean };
+
+const ACCOUNT_LOOKS = {
+  has: { label: "Has it", icon: CircleCheck, tile: "bg-[#dcfce7] text-[#15803d]", pill: "bg-[#dcfce7] text-[#15803d]" },
+  create: { label: "We'll create it", icon: Plus, tile: "bg-[#e8eefe] text-[#2f5fd8]", pill: "bg-[#e8eefe] text-[#2f5fd8]" },
+  none: { label: "Doesn't have it", icon: CircleMinus, tile: "bg-[#f1f5f9] text-[#64748b]", pill: "bg-[#f1f5f9] text-[#475569]" },
+  unsure: { label: "Not sure", icon: CircleHelp, tile: "bg-[#fef3c7] text-[#b45309]", pill: "bg-[#fef3c7] text-[#b45309]" },
+  blank: { label: "No answer", icon: CircleHelp, tile: "bg-[#f8fafc] text-[#cbd5e1]", pill: "bg-[#f8fafc] text-[#94a3b8]" },
+} as const;
+
+const lookOf = (answer?: AccountAnswer): keyof typeof ACCOUNT_LOOKS =>
+  answer?.has === "yes" ? "has" : answer?.wantsCreated ? "create" : answer?.has === "no" ? "none" : answer?.has === "unsure" ? "unsure" : "blank";
+
+const noteOf = (answer?: AccountAnswer) =>
+  answer?.has === "yes"
+    ? undefined
+    : answer?.has === "no"
+      ? answer.wantsCreated
+        ? "They asked us to set it up"
+        : answer.wantsCreated === false
+          ? "They'll set it up themselves"
+          : "Not said whether we should create it"
+      : answer?.has === "unsure"
+        ? answer.wantsCreated
+          ? "Check for one, and create it if there isn't"
+          : "We'll check whether one exists"
+        : "Not answered yet";
+
+const ClientAccounts = ({ onboarding }: { onboarding?: Client["onboarding"] }) => {
+  const rows = SIGNUP_ACCOUNTS.map(([section, key, name, icon]) => {
+    const answer = (onboarding?.[section] as Record<string, AccountAnswer | undefined> | undefined)?.[key];
+    return { key: `${section}.${key}`, name, icon, answer, look: lookOf(answer) };
+  });
+  const count = (look: keyof typeof ACCOUNT_LOOKS) => rows.filter((row) => row.look === look).length;
+  return (
+    <>
+      <div className="mb-3 flex flex-wrap gap-1.5">
+        {(["has", "create", "none", "unsure", "blank"] as const)
+          .filter((look) => count(look))
+          .map((look) => (
+            <span key={look} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11.5px] font-semibold ${ACCOUNT_LOOKS[look].pill}`}>
+              {count(look)} · {ACCOUNT_LOOKS[look].label}
+            </span>
+          ))}
+      </div>
+      <ul className="grid list-none grid-cols-1 gap-2.5 sm:grid-cols-2">
+        {rows.map(({ key, name, icon: Icon, answer, look }) => {
+          const style = ACCOUNT_LOOKS[look];
+          const link = answer?.has === "yes" ? answer.link?.trim() : undefined;
+          return (
+            <li key={key} className={`flex items-center gap-3 rounded-xl border p-3 ${look === "blank" ? "border-dashed border-[#e2e8f0] bg-white" : "border-[#e2e8f0] bg-white"}`}>
+              <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${style.tile}`}>
+                <Icon size={17} strokeWidth={2} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[13px] font-semibold text-[#0f172a]">{name}</span>
+                {link ? (
+                  <a href={/^https?:\/\//i.test(link) ? link : `https://${link}`} target="_blank" rel="noopener noreferrer" className="mt-0.5 flex min-w-0 items-center gap-1 text-[12px] font-medium text-[#2563eb] hover:underline">
+                    <span className="truncate">{link}</span>
+                    <ArrowUpRight size={11} strokeWidth={2.25} className="shrink-0" />
+                  </a>
+                ) : (
+                  <span className="mt-0.5 block truncate text-[12px] text-[#64748b]">{answer?.has === "yes" ? "No link given" : noteOf(answer)}</span>
+                )}
+              </span>
+              <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${style.pill}`}>
+                <style.icon size={11} strokeWidth={2.5} />
+                {style.label}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+};
 
 // What the client uploaded with their onboarding — their logo, their photos and videos — a
 // tile for each file, which opens it.
@@ -298,17 +561,18 @@ const answerRow = (item: Item, icon: LucideIcon): Row => ({
 
 // The five parts. `manager` and `team` are the names of the staff on the account.
 const RecordSections = ({ client, editHref, manager, team }: { client: Client; editHref?: string; manager?: string; team: string[] }) => {
-  const { communication, business, services = [], contract, billing, transfer, reportDelivery } = client.details ?? {};
+  const { communication, business, services = [], contract, billing, reportDelivery } = client.details ?? {};
   const logoDesign = business?.logoDesign;
   const monthly = services.reduce((sum, plan) => sum + plan.monthly, 0);
   // What both forms ask — the team's and the client's onboarding form — is kept once, and shown once.
   const shared = sharedOf(client);
-  const oneTime = shared.hasLogo === false && logoDesign?.add ? (logoDesign.price ?? 0) : 0;
+  // Paid once: a logo designed for them, and the team's own services priced once.
+  const oneTime = (shared.hasLogo === false && logoDesign?.add ? (logoDesign.price ?? 0) : 0) + services.reduce((sum, plan) => sum + (plan.custom ? (plan.oneTime ?? 0) : 0), 0);
+  // What the client asked for and doesn't have yet (a service of the same name answers it).
+  const taken = new Set([...services.map((plan) => plan.name.trim().toLowerCase()), ...client.serviceTypes.map((name) => name.trim().toLowerCase())]);
+  const openRequests = (client.serviceRequests ?? []).filter((request) => request.status === "open" && !taken.has(request.name.trim().toLowerCase()));
   // Services on the client that were never priced on the form.
   const unpriced = client.serviceTypes.filter((name) => !services.some((plan) => plan.name === name));
-  const has = transfer?.has ?? [];
-  // How far a transfer has got, and which of its steps are done.
-  const checklist = (all: string[], done: string[] = []) => `${done.length} of ${all.length} done${done.length ? ` — ${done.join(", ")}` : ""}`;
   const menus = portalMenusOf(client);
 
   const examples = shared.competitors.map((row) => [row.url, row.note].filter(Boolean).join(" — "));
@@ -316,110 +580,306 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
   // the one account only asked about then.
   const about = client.onboarding?.business;
   const goals = client.onboarding?.goals;
-  const kickoff = client.onboarding?.kickoffCall;
-  const metaAds = client.onboarding?.social?.metaAds;
-  const metaAdsRow: Row | undefined = metaAds?.has
-    ? {
-        icon: Link2,
-        label: "Meta Ads (Facebook / Instagram)",
-        value: metaAds.has === "yes" ? "Has an account" : metaAds.wantsCreated ? "Create the account" : metaAds.has === "unsure" ? "Check whether one exists" : "Doesn't have one",
-        tone: metaAds.has === "yes" ? "ready" : metaAds.wantsCreated ? "create" : metaAds.has === "unsure" ? "followup" : "none",
-        note: metaAds.link ? `Link or name: ${metaAds.link}` : undefined,
-      }
-    : undefined;
-  // What the client answered on the onboarding form, by the form's own steps. It sits with
-  // what the team recorded, under Onboarding and transfer — once they have answered any of it.
+  // What the client answered on the onboarding form, by the form's own steps — for where the
+  // onboarding stands. The answers themselves are on the onboarding page (OnboardingTransfer).
   const [site, domains, mail, brand, google, social, media] = groupsOf({ onboarding: client.onboarding ?? { status: "in_progress" } });
-  const answeredAny = [site, domains, mail, brand, google, social, media].some((group) => group.items.some(isAnswered));
-  const uploads = uploadsOf(client.onboarding);
+
+  const answered = client.onboarding;
+
+  // ── 1. Who they are and how to reach them ──
+  // Where they are: the address the team recorded; else what the client gave when signing up.
+  const areasLine = listed(about?.areas);
+  const location = client.address?.trim() || areasLine;
+  // Someone other than the person who signed up looks after the account.
+  const otherContact = about?.contact && about.contact.isAccountOwner === false ? [about.contact.name, about.contact.email, about.contact.phone].filter(Boolean).join(" · ") : "";
+  const hasAccountAnswers = SIGNUP_ACCOUNTS.some(([section, key]) => (answered?.[section] as Record<string, AccountAnswer | undefined> | undefined)?.[key]?.has);
+  const infoRows: Row[] = [
+    { icon: User, label: "Contact name", value: client.contactName },
+    { icon: Building2, label: "Company name", value: client.companyName },
+    { icon: Mail, label: "Email", value: client.email },
+    { icon: Phone, label: "Phone", value: client.phone },
+    { icon: MapPin, label: "Location", value: location, wide: true },
+    ...(otherContact ? [{ icon: UserCog, label: "Main contact for the account", value: otherContact, wide: true }] : []),
+    // What the team recorded; else how the client said to reach them, at sign-up.
+    { icon: MessageSquare, label: "Preferred communication", value: listed(communication?.methods) ?? REACH_BY[about?.contact?.reachBy ?? ""] },
+    { icon: Clock, label: "Best time to reach", value: communication?.bestTime },
+    { icon: Globe, label: "Time zone", value: communication?.timeZone },
+  ];
+
+  // ── 2. What the business does ──
+  const businessRows: Row[] = [
+    { icon: FileText, label: "What the business does", value: about?.description, wide: true },
+    { icon: Briefcase, label: "Industry", value: business?.industry },
+    { icon: Building2, label: "Business type", value: business?.businessType },
+    { icon: Layers, label: "Services they offer", value: listed(about?.services), wide: true },
+    // The team's own words for it; else the client's — unless those are already the location.
+    { icon: Target, label: "Areas they serve", value: business?.serviceArea || (client.address?.trim() ? areasLine : areasLine ? "Same as the location" : undefined), wide: true },
+    { icon: Users, label: "Target audience", value: business?.targetAudience },
+    { icon: StickyNote, label: "Other details", value: business?.otherDetails, wide: true },
+  ];
+
+  // ── 4. Their website and brand ──
+  const websiteRows: Row[] = [
+    { icon: Globe, label: "Current website", value: shared.hasNoWebsite ? "No website yet" : shared.website },
+    {
+      icon: RefreshCw,
+      label: "Website plan",
+      value: answered?.website?.need === "new" ? "Build a new website" : answered?.website?.need === "redesign" ? "Redesign the current site" : answered?.website?.need === "no" ? "Keep the current site" : undefined,
+    },
+    { icon: FileText, label: "Pages they want", value: listed(answered?.website?.pages), wide: true },
+    { icon: Check, label: "Features they want", value: listed(answered?.website?.features), wide: true },
+    { icon: Link2, label: "Example and competitor websites", value: examples.length ? examples.join("\n") : shared.competitorsBefore, wide: true },
+  ];
+  const domainRows: Row[] = [
+    {
+      icon: Link2,
+      label: "Domain",
+      value:
+        answered?.domain?.has === "yes"
+          ? [answered.domain.name, answered.domain.platform && `registered at ${answered.domain.platform}`].filter(Boolean).join(" · ") || "Has one"
+          : answered?.domain?.has === "no"
+            ? answered.domain.wantsCreated
+              ? `Wants us to register one${answered.domain.wishlist ? `: ${answered.domain.wishlist}` : ""}`
+              : "Doesn't have one"
+            : answered?.domain?.has === "unsure"
+              ? "Not sure"
+              : undefined,
+    },
+    {
+      icon: Mail,
+      label: "Business email",
+      value:
+        answered?.email?.has === "yes"
+          ? `Has one${answered.email.provider && answered.email.provider !== "Not sure" ? ` · ${answered.email.provider}` : ""}`
+          : answered?.email?.has === "no"
+            ? answered.email.wantsCreated
+              ? `Wants Google Workspace set up${answered.email.accounts ? ` · ${answered.email.accounts} account${answered.email.accounts === 1 ? "" : "s"}` : ""}`
+              : "Doesn't have one"
+            : undefined,
+    },
+  ];
+  // Only the profiles there are a link to: the rest are on the onboarding page, item by item.
+  const profileRows: Row[] = [
+    { icon: MapPin, label: "Google Business Profile", value: shared.googleBusinessProfile },
+    ...SOCIAL_PROFILES.map(([key, label]) => ({ icon: Link2, label: label.replace(/ URL$/, ""), value: shared.social[key] })),
+  ].filter((row) => row.value);
+  const logoRows: Row[] = [
+    { icon: Palette, label: "Has a logo", value: yesNo(shared.hasLogo) },
+    ...(shared.hasLogo === false
+      ? [
+          {
+            icon: Palette,
+            label: "Logo design",
+            value: logoDesign?.add
+              ? `Added to onboarding · ${money(logoDesign.price ?? 0)} one-time · ${logoDesign.concepts ?? 0} concepts`
+              : answered?.logo?.wantsCreated
+                ? "The client asked us to design one"
+                : answered?.logo?.wantsCreated === false
+                  ? "The client doesn't want one designed"
+                  : "Not added to onboarding",
+          },
+          { icon: PenLine, label: "Style they'd like", value: shared.logoStyle, wide: true },
+        ]
+      : []),
+  ];
+  const logoUploads = [
+    { title: "Their logo", files: answered?.logo?.files ?? [] },
+    { title: "Style they'd like", files: answered?.logo?.styleFiles ?? [] },
+  ].filter((group) => group.files.length);
+
+  const goalRows: Row[] = goals
+    ? [
+        { icon: DollarSign, label: "Revenue per month", value: targetOf(goals.revenue, money) },
+        { icon: Users, label: "Leads per month", value: targetOf(goals.leads, String) },
+        { icon: User, label: "New clients per month", value: targetOf(goals.newClients, String) },
+        { icon: Clock, label: "How soon", value: GOAL_TIMEFRAMES[goals.timeframe ?? ""] },
+        { icon: CreditCard, label: "Monthly marketing budget", value: GOAL_BUDGETS[goals.budget ?? ""] },
+        { icon: DollarSign, label: "Cost of one lead today", value: goals.costPerLead === undefined ? undefined : money(goals.costPerLead) },
+        { icon: DollarSign, label: "Worth of one new client", value: goals.clientValue === undefined ? undefined : money(goals.clientValue) },
+        { icon: Link2, label: "Where leads come from", value: listed(goals.leadSources?.map((source) => LEAD_SOURCES[source] ?? source)), wide: true },
+      ]
+    : [];
+  const contractRows: Row[] = [
+    { icon: Calendar, label: "Start date", value: client.startDate ? formatDate(client.startDate) : undefined },
+    { icon: Clock, label: "Length", value: contract?.termMonths ? `${contract.termMonths} month${contract.termMonths === 1 ? "" : "s"}` : contract ? "Custom" : undefined },
+    { icon: Calendar, label: "End date", value: day(contract?.endDate) },
+    { icon: RefreshCw, label: "Renewal", value: contract?.renewal },
+    { icon: Bell, label: "Cancellation notice", value: contract?.cancellationNotice },
+    { icon: Bell, label: "Renewal reminder", value: contract?.renewalReminder },
+    { icon: PenLine, label: "Signed", value: contract?.signed ? SIGNED[contract.signed] : undefined },
+    ...(contract?.signed === "yes" ? [{ icon: Calendar, label: "Date signed", value: day(contract.dateSigned) }] : []),
+    ...(contract?.signed === "sent" ? [{ icon: Calendar, label: "Date sent", value: day(contract.dateSent) }] : []),
+  ];
+  const billingRows: Row[] = [
+    { icon: CreditCard, label: "Payment on file", value: billing ? (billing.paymentOnFile ? "Yes, added" : "Not yet") : undefined },
+    { icon: CreditCard, label: "Payment method", value: billing?.method },
+    { icon: RefreshCw, label: "Billing cycle", value: billing?.cycle },
+    { icon: Calendar, label: "Billing day", value: billing?.day },
+    { icon: DollarSign, label: "Setup fee", value: billing?.setupFee },
+    { icon: Mail, label: "Report delivery", value: reportDelivery },
+  ];
+  const accountRows: Row[] = [
+    { icon: UserCog, label: "Account manager", value: manager },
+    // The portal password — only ever sent to those who manage clients (who get the edit link).
+    {
+      icon: Lock,
+      label: "Portal password",
+      value: client.portalPassword
+        ? client.portalPassword
+        : !client.user
+          ? "No portal login"
+          : !editHref
+            ? "Only managers can see it"
+            : "Not saved — set a new password on Edit Client to see it",
+      tone: client.portalPassword ? undefined : "none",
+      content: client.portalPassword ? <PasswordValue password={client.portalPassword} /> : undefined,
+    },
+    { icon: Users, label: "Assigned staff", value: team.join(", ") },
+    // No choice made is every page. Settings is always there, so it isn't among them.
+    {
+      icon: LayoutGrid,
+      label: "Portal pages shown",
+      value: menus ? (listed(PORTAL_MENUS.filter(([key]) => menus.includes(key)).map(([, label]) => label)) ?? "None of them — only Settings") : "All pages",
+      wide: true,
+    },
+    ...(menus ? [{ icon: LayoutGrid, label: "Portal pages hidden", value: listed(PORTAL_MENUS.filter(([key]) => !menus.includes(key)).map(([, label]) => label)), wide: true }] : []),
+    { icon: StickyNote, label: "Internal notes", value: client.notes, wide: true },
+  ];
+
+  // The parts in order, each closed until it is clicked.
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
+  // In the order the client is got to know: who, their business (what it does, where it wants to
+  // be, what it has online), what they buy from us, their onboarding, and the account itself —
+  // the same five parts as the client form.
+  const titles = ["Client information", "About the business", "Services and pricing", "Onboarding and transfer", "Account setup"];
+  const part = (title: string) => ({
+    step: titles.indexOf(title) + 1,
+    steps: titles.length,
+    open: Boolean(opened[title]),
+    onToggle: () => setOpened((now) => ({ ...now, [title]: !now[title] })),
+  });
+
+  // Onboarding: what the client is asked (the team's ticks — see OnboardingControls), how much
+  // of it is approved, and what is still waiting on them or needs our help.
+  const notNeeded = new Set(client.onboarding?.notNeeded ?? DEFAULT_NOT_NEEDED);
+  const approvedIds = new Set(client.onboarding?.approved ?? []);
+  const asked = [site, domains, mail, brand, google, social, media]
+    .filter((group) => !notNeeded.has(`step:${group.id}`))
+    .flatMap((group) => group.items.map((item) => ({ item, id: ["google", "social", "media"].includes(group.id) ? `${group.id}.${item.id}` : item.id })))
+    .filter(({ id }) => !notNeeded.has(id));
+  // Who the client is ("contact") is always asked.
+  const askedCount = asked.length + 1;
+  const approvedCount = asked.filter(({ id }) => approvedIds.has(id)).length + (approvedIds.has("contact") ? 1 : 0);
+  // Where the rest stands, in the client's own words (Submitted / Todo — OnboardingReview).
+  const todo = asked.filter(({ item, id }) => !approvedIds.has(id) && (!isAnswered(item) || item.tone === "waiting")).length;
+  const submitted = asked.filter(({ item, id }) => !approvedIds.has(id) && isAnswered(item) && item.tone !== "waiting").length;
+  const onboardingChips = chipsOf([
+    client.onboarding?.status === "submitted" ? `Submitted${client.onboarding.submittedAt ? ` ${formatDate(client.onboarding.submittedAt)}` : ""}` : client.onboarding?.status ? "Still filling in" : "Not started",
+    submitted ? `${submitted} submitted` : undefined,
+    todo ? `${todo} todo` : undefined,
+  ]);
 
   return (
     <>
-      <Section icon={Users} title="Client information" sub="The client's main contact details." editHref={editHref}>
-        <Rows
-          rows={[
-            { icon: User, label: "Contact name", value: client.contactName },
-            { icon: Building2, label: "Company name", value: client.companyName },
-            { icon: Mail, label: "Email", value: client.email },
-            { icon: Phone, label: "Phone", value: client.phone },
-            { icon: MapPin, label: "Address", value: client.address, wide: true },
-            { icon: MessageSquare, label: "Preferred communication", value: listed(communication?.methods) },
-            { icon: Clock, label: "Best time to reach", value: communication?.bestTime },
-            { icon: Globe, label: "Time zone", value: communication?.timeZone },
-          ]}
-        />
-      </Section>
-
-      <Section icon={Briefcase} title="Business details" sub="What the team collected about the business." editHref={editHref}>
-        <Rows
-          rows={[
-            { icon: Briefcase, label: "Industry", value: business?.industry },
-            { icon: Building2, label: "Business type", value: business?.businessType },
-            { icon: Globe, label: "Website", value: shared.hasNoWebsite ? "No website yet" : shared.website },
-            { icon: MapPin, label: "Google Business Profile", value: shared.googleBusinessProfile },
-            { icon: Target, label: "Service area", value: business?.serviceArea },
-            { icon: Users, label: "Target audience", value: business?.targetAudience },
-            { icon: FileText, label: "Competitors", value: examples.length ? examples.join("\n") : shared.competitorsBefore, wide: true },
-            ...SOCIAL_PROFILES.map(([key, label]) => ({ icon: Link2, label: label.replace(/ URL$/, ""), value: shared.social[key] })),
-            { icon: Palette, label: "Has a logo", value: yesNo(shared.hasLogo) },
-            ...(shared.hasLogo === false
-              ? [
-                  {
-                    icon: Palette,
-                    label: "Logo design",
-                    value: logoDesign?.add ? `Added to onboarding · ${money(logoDesign.price ?? 0)} one-time · ${logoDesign.concepts ?? 0} concepts` : "Not added to onboarding",
-                  },
-                  { icon: PenLine, label: "Logo style", value: shared.logoStyle },
-                ]
-              : []),
-            { icon: FileText, label: "Other details", value: business?.otherDetails, wide: true },
-          ]}
-        />
-        {about ? (
+      <Section
+        icon={Users}
+        title="Client information"
+        sub="Who the client is, and how and when to reach them."
+        editHref={editHref && `${editHref}?section=1`}
+        {...part("Client information")}
+        tint="blue"
+        chips={chipsOf([
+          client.contactName,
+          client.companyName,
+          client.email,
+          client.onboarding?.kickoffCall?.booked ? "Call booked" : client.onboarding?.status ? "Call not booked yet" : undefined,
+        ])}
+        badge={filledOf(infoRows)}
+      >
+        <Rows rows={infoRows} />
+        {/* What they said about their accounts when signing up. */}
+        {hasAccountAnswers ? (
           <>
-            <Subhead>From the client, at sign-up</Subhead>
-            <Rows
-              rows={[
-                { icon: FileText, label: "Business description", value: about.description, wide: true },
-                { icon: Briefcase, label: "Services they offer", value: listed(about.services), wide: true },
-                { icon: MapPin, label: "Areas they serve", value: listed(about.areas), wide: true },
-                { icon: User, label: "Main contact", value: [about.contact?.name, about.contact?.email, about.contact?.phone].filter(Boolean).join(" · ") },
-                { icon: MessageSquare, label: "Best way to reach them", value: REACH_BY[about.contact?.reachBy ?? ""] },
-              ]}
-            />
+            <Subhead>Accounts they have</Subhead>
+            <ClientAccounts onboarding={client.onboarding} />
+          </>
+        ) : null}
+        {client.onboarding?.status || client.onboarding?.kickoffCall ? (
+          <>
+            <Subhead>Onboarding call</Subhead>
+            <OnboardingCall call={client.onboarding?.kickoffCall} />
           </>
         ) : null}
       </Section>
 
-      {/* Asked only of a client who signs up themselves: a part of its own when they answered it. */}
-      {goals ? (
-        <Section icon={Target} title="Goals" sub="Where the client is today and where they want to be, as they said when signing up.">
-          <Rows
-            rows={[
-              { icon: DollarSign, label: "Revenue per month", value: targetOf(goals.revenue, money) },
-              { icon: Users, label: "Leads per month", value: targetOf(goals.leads, String) },
-              { icon: User, label: "New clients per month", value: targetOf(goals.newClients, String) },
-              { icon: Clock, label: "How soon", value: GOAL_TIMEFRAMES[goals.timeframe ?? ""] },
-              { icon: CreditCard, label: "Monthly marketing budget", value: GOAL_BUDGETS[goals.budget ?? ""] },
-              { icon: DollarSign, label: "Cost of one lead today", value: goals.costPerLead === undefined ? undefined : money(goals.costPerLead) },
-              { icon: DollarSign, label: "Worth of one new client", value: goals.clientValue === undefined ? undefined : money(goals.clientValue) },
-              { icon: Link2, label: "Where leads come from", value: listed(goals.leadSources?.map((source) => LEAD_SOURCES[source] ?? source)), wide: true },
-            ]}
-          />
-        </Section>
-      ) : null}
+      <Section
+        icon={Briefcase}
+        title="About the business"
+        sub="What they do and who they serve, where they want to be, and their website and brand."
+        editHref={editHref && `${editHref}?section=2`}
+        {...part("About the business")}
+        tint="green"
+        chips={chipsOf([business?.industry, ...(about?.services ?? []).slice(0, 2), shared.hasNoWebsite ? "No website yet" : shared.website])}
+        badge={filledOf([...businessRows, ...goalRows, ...websiteRows, ...domainRows, ...logoRows])}
+      >
+        <Subhead first>The business</Subhead>
+        <Rows rows={businessRows} />
 
-      <Section icon={DollarSign} title="Services and pricing" sub="The services the client agreed to, with their quantities and prices." editHref={editHref}>
+        {/* Asked only of a client who signs up themselves. */}
+        {goals ? (
+          <>
+            <Subhead>Goals</Subhead>
+            <Rows rows={goalRows} />
+          </>
+        ) : null}
+
+        <Subhead>Website</Subhead>
+        <Rows rows={websiteRows} />
+
+        <Subhead>Domain and email</Subhead>
+        <Rows rows={domainRows} />
+
+        <Subhead>Profiles online</Subhead>
+        {profileRows.length ? <Rows rows={profileRows} /> : <p className="text-[12.5px] text-[#64748b]">No links to their profiles yet. Each account is on the onboarding page.</p>}
+
+        <Subhead>Logo</Subhead>
+        <Rows rows={logoRows} />
+        {logoUploads.length ? (
+          <div className="mt-3.5">
+            <Uploads groups={logoUploads} />
+          </div>
+        ) : null}
+      </Section>
+
+      <Section icon={DollarSign} title="Services and pricing" sub="The services the client agreed to, with their quantities and prices." editHref={editHref && `${editHref}?section=3`} {...part("Services and pricing")} tint="amber" chips={chipsOf([...services.map((plan) => plan.name), ...unpriced])} badge={{ label: `${money(monthly)}/mo`, tone: "money" }}>
         {services.map((plan) => (
           <div key={plan.name} className="mb-3 rounded-xl border border-[#bbf7d0] bg-[#f4fbf6] p-3.5 text-[12.5px] last:mb-0">
             <div className="flex items-baseline justify-between gap-3 text-[13.5px] font-semibold text-[#14532d]">
-              <span>{plan.name}</span>
-              <span className="tabular-nums whitespace-nowrap">{money(plan.monthly)}/mo</span>
+              <span>
+                {plan.name}
+                {plan.custom ? <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[10.5px] font-bold text-[#15803d]">Custom</span> : null}
+              </span>
+              <span className="tabular-nums whitespace-nowrap">{plan.custom && !plan.monthly && plan.oneTime ? `${money(plan.oneTime)} one-time` : `${money(plan.monthly)}/mo`}</span>
             </div>
-            <div className="mt-1 text-[12px] leading-normal text-[#3f6212]">{plan.fields.map((field) => `${field.label}: ${fieldValue(plan.name, field.label, field.value)}`).join(" · ")}</div>
-            <div className="mt-1.5 text-[12px] leading-normal text-[#3f6212]">
-              <b className="font-semibold text-[#15803d]">Included:</b> {listed(plan.included) ?? "Nothing ticked"}
-            </div>
+            {plan.custom && (plan.deadline || plan.duration) ? (
+              <div className="mt-1 text-[12px] leading-normal text-[#3f6212]">
+                {[plan.deadline ? `Due ${day(plan.deadline)}` : "", plan.duration ? `Takes ${plan.duration}` : ""].filter(Boolean).join(" · ")}
+              </div>
+            ) : null}
+            {plan.custom ? (
+              plan.included.length ? (
+                <div className="mt-1.5 text-[12px] leading-normal text-[#3f6212]">
+                  <b className="font-semibold text-[#15803d]">Included:</b> {listed(plan.included)}
+                </div>
+              ) : null
+            ) : (
+              <>
+                <div className="mt-1 text-[12px] leading-normal text-[#3f6212]">{plan.fields.map((field) => `${field.label}: ${fieldValue(plan.name, field.label, field.value)}`).join(" · ")}</div>
+                <div className="mt-1.5 text-[12px] leading-normal text-[#3f6212]">
+                  <b className="font-semibold text-[#15803d]">Included:</b> {listed(plan.included) ?? "Nothing ticked"}
+                </div>
+              </>
+            )}
             {plan.addons.length ? (
               <div className="mt-1 text-[12px] leading-normal text-[#3f6212]">
                 <b className="font-semibold text-[#15803d]">Add-on rates (not billed now):</b> {plan.addons.map((addon) => `${addon.label} ${money(addon.price)}`).join(" · ")}
@@ -434,108 +894,112 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
           </div>
         ) : null}
         {services.length || unpriced.length ? null : <div className="rounded-xl border border-[#fecaca] bg-[#fff7f7] p-3.5 text-[13px] font-medium text-[#b91c1c]">No services yet.</div>}
+        {openRequests.length ? (
+          <div className="mt-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] p-3.5 text-[12.5px]">
+            <b className="text-[13.5px] font-semibold text-[#92400e]">Requested by the client</b>
+            <ul className="mt-1.5 flex list-none flex-col gap-1">
+              {openRequests.map((request) => (
+                  <li key={request._id} className="text-[#78350f]">
+                    <span className="font-semibold">{request.name}</span> · {formatDate(request.requestedAt)}
+                    {request.note ? ` · ${request.note}` : ""}
+                  </li>
+                ))}
+            </ul>
+            {editHref ? <div className={`${dashPendingSub} mt-1.5`}>Add them as custom services on Edit → Services and pricing.</div> : null}
+          </div>
+        ) : null}
         <div className="mt-4 rounded-xl border border-[#86efac] bg-[#dcfce7] px-4 py-3 text-[12.5px] text-[#14532d]">
           <div className="flex items-baseline justify-between gap-3">
             <span>Monthly total</span>
             <b className="text-[16px] font-semibold tabular-nums">{money(monthly)}</b>
           </div>
           <div className="mt-1.5 flex items-baseline justify-between gap-3 border-t border-[#bbf7d0] pt-1.5 text-[#3f6212]">
-            <span>One-time fees (logo design)</span>
+            <span>One-time fees</span>
             <span className="tabular-nums">{money(oneTime)}</span>
           </div>
         </div>
       </Section>
 
-      <Section icon={ClipboardList} title="Onboarding and transfer" sub="What the client already has, what they need, and what we are taking over." editHref={editHref}>
-        {answeredAny ? <Subhead first>Recorded by the team</Subhead> : null}
-        <Rows
-          rows={[
-            { icon: Check, label: "Client has", value: listed(CLIENT_HAS.filter(([key]) => has.includes(key)).map(([, label]) => label)), wide: true },
-            { icon: Plus, label: "Client needs", value: listed(transfer?.needs), wide: true },
-            ...(has.includes("website") ? [{ icon: Globe, label: "Website transfer", value: checklist(WEBSITE_TRANSFER, transfer?.websiteDone), wide: true }] : []),
-            ...(has.includes("social") ? [{ icon: Users, label: "Social media transfer", value: checklist(SOCIAL_TRANSFER, transfer?.socialDone), wide: true }] : []),
-          ]}
-        />
-        {answeredAny ? (
-          <>
-            <Subhead>Website, domain and brand — from the client</Subhead>
-            <Rows rows={[...site.items, ...domains.items, ...mail.items, ...brand.items].map((item) => answerRow(item, Globe))} />
-            <Subhead>Google accounts — from the client</Subhead>
-            <Rows rows={google.items.map((item) => answerRow(item, MapPin))} />
-            <Subhead>Social media — from the client</Subhead>
-            <Rows rows={[...social.items.map((item) => answerRow(item, Link2)), ...(metaAdsRow ? [metaAdsRow] : [])]} />
-            <Subhead>Photos and videos — from the client</Subhead>
-            <Rows rows={media.items.map((item) => answerRow(item, Camera))} />
-          </>
-        ) : null}
-        {uploads.length ? (
-          <>
-            <Subhead>Files the client uploaded</Subhead>
-            <Uploads groups={uploads} />
-          </>
-        ) : null}
-      </Section>
+      {/* It has a page of its own (clients/[slug]/onboarding): clicking it goes there. */}
+      <Section
+        icon={ClipboardList}
+        title="Onboarding and transfer"
+        sub="What the client already has, what they need, and what we are taking over."
+        {...part("Onboarding and transfer")}
+        href={`/clients/${client._id}/onboarding`}
+        tint="violet"
+        chips={onboardingChips}
+        badge={{ label: `${approvedCount} / ${askedCount} approved`, tone: approvedCount === askedCount ? "done" : "pending" }}
+      />
 
-      <Section icon={Lock} title="Account setup" sub="Contract, billing, who looks after the client and what their portal shows." editHref={editHref}>
+      <Section icon={Lock} title="Account setup" sub="Contract, billing, who looks after the client and what their portal shows." editHref={editHref && `${editHref}?section=5`} {...part("Account setup")} tint="slate" chips={chipsOf([client.startDate ? formatDate(client.startDate) : undefined, contractRows[1]?.value, day(contract?.endDate), contract?.renewal])} badge={filledOf([...contractRows, ...billingRows, ...accountRows])}>
         <Subhead first>Contract</Subhead>
-        <Rows
-          rows={[
-            { icon: Calendar, label: "Start date", value: client.startDate ? formatDate(client.startDate) : undefined },
-            { icon: Clock, label: "Length", value: contract?.termMonths ? `${contract.termMonths} month${contract.termMonths === 1 ? "" : "s"}` : contract ? "Custom" : undefined },
-            { icon: Calendar, label: "End date", value: day(contract?.endDate) },
-            { icon: RefreshCw, label: "Renewal", value: contract?.renewal },
-            { icon: Bell, label: "Cancellation notice", value: contract?.cancellationNotice },
-            { icon: Bell, label: "Renewal reminder", value: contract?.renewalReminder },
-            { icon: PenLine, label: "Signed", value: contract?.signed ? SIGNED[contract.signed] : undefined },
-            ...(contract?.signed === "yes" ? [{ icon: Calendar, label: "Date signed", value: day(contract.dateSigned) }] : []),
-            ...(contract?.signed === "sent" ? [{ icon: Calendar, label: "Date sent", value: day(contract.dateSent) }] : []),
-          ]}
-        />
+        <Rows rows={contractRows} />
 
         <Subhead>Billing</Subhead>
-        <Rows
-          rows={[
-            { icon: CreditCard, label: "Payment on file", value: billing ? (billing.paymentOnFile ? "Yes, added" : "Not yet") : undefined },
-            { icon: CreditCard, label: "Payment method", value: billing?.method },
-            { icon: RefreshCw, label: "Billing cycle", value: billing?.cycle },
-            { icon: Calendar, label: "Billing day", value: billing?.day },
-            { icon: DollarSign, label: "Setup fee", value: billing?.setupFee },
-            { icon: Mail, label: "Report delivery", value: reportDelivery },
-          ]}
-        />
+        <Rows rows={billingRows} />
 
         <Subhead>Account</Subhead>
-        <Rows
-          rows={[
-            { icon: UserCog, label: "Account manager", value: manager },
-            // The portal password — only ever sent to those who manage clients (who get the edit link).
-            {
-              icon: Lock,
-              label: "Portal password",
-              value: client.portalPassword
-                ? client.portalPassword
-                : !client.user
-                  ? "No portal login"
-                  : !editHref
-                    ? "Only managers can see it"
-                    : "Not saved — set a new password on Edit Client to see it",
-              tone: client.portalPassword ? undefined : "none",
-              content: client.portalPassword ? <PasswordValue password={client.portalPassword} /> : undefined,
-            },
-            { icon: Users, label: "Assigned staff", value: team.join(", ") },
-            // No choice made is every page. Settings is always there, so it isn't among them.
-            {
-              icon: LayoutGrid,
-              label: "Portal pages shown",
-              value: menus ? (listed(PORTAL_MENUS.filter(([key]) => menus.includes(key)).map(([, label]) => label)) ?? "None of them — only Settings") : "All pages",
-              wide: true,
-            },
-            ...(menus ? [{ icon: LayoutGrid, label: "Portal pages hidden", value: listed(PORTAL_MENUS.filter(([key]) => !menus.includes(key)).map(([, label]) => label)), wide: true }] : []),
-            ...(kickoff ? [{ icon: Calendar, label: "Kickoff call", value: kickoff.booked ? "Booked (the client says so)" : "Not booked yet" }] : []),
-            { icon: StickyNote, label: "Internal notes", value: client.notes, wide: true },
-          ]}
-        />
+        <Rows rows={accountRows} />
       </Section>
+    </>
+  );
+};
+
+// The onboarding and transfer part in full, on its own page (clients/[slug]/onboarding): what the
+// team recorded about the transfer, what the client answered on their onboarding form, and the
+// files they uploaded. Without `answers`, only what the team recorded — for the onboarding review
+// (OnboardingReview.tsx), which shows the answers, and their files, item by item.
+export const OnboardingTransfer = ({ client, answers = true }: { client: Client; answers?: boolean }) => {
+  const transfer = client.details?.transfer;
+  const has = transfer?.has ?? [];
+  // How far a transfer has got, and which of its steps are done.
+  const checklist = (all: string[], done: string[] = []) => `${done.length} of ${all.length} done${done.length ? ` — ${done.join(", ")}` : ""}`;
+  const metaAds = client.onboarding?.social?.metaAds;
+  const metaAdsRow: Row | undefined = metaAds?.has
+    ? {
+        icon: Link2,
+        label: "Meta Ads (Facebook / Instagram)",
+        value: metaAds.has === "yes" ? "Has an account" : metaAds.wantsCreated ? "Create the account" : metaAds.has === "unsure" ? "Check whether one exists" : "Doesn't have one",
+        tone: metaAds.has === "yes" ? "ready" : metaAds.wantsCreated ? "create" : metaAds.has === "unsure" ? "followup" : "none",
+        note: metaAds.link ? `Link or name: ${metaAds.link}` : undefined,
+      }
+    : undefined;
+  // What the client answered on the onboarding form, by the form's own steps — once they have
+  // answered any of it.
+  const [site, domains, mail, brand, google, social, media] = groupsOf({ onboarding: client.onboarding ?? { status: "in_progress" } });
+  const answeredAny = answers && [site, domains, mail, brand, google, social, media].some((group) => group.items.some(isAnswered));
+  const uploads = answers ? uploadsOf(client.onboarding) : [];
+
+  return (
+    <>
+      {answeredAny ? <Subhead first>Recorded by the team</Subhead> : null}
+      <Rows
+        rows={[
+          { icon: Check, label: "Client has", value: listed(CLIENT_HAS.filter(([key]) => has.includes(key)).map(([, label]) => label)), wide: true },
+          { icon: Plus, label: "Client needs", value: listed(transfer?.needs), wide: true },
+          ...(has.includes("website") ? [{ icon: Globe, label: "Website transfer", value: checklist(WEBSITE_TRANSFER, transfer?.websiteDone), wide: true }] : []),
+          ...(has.includes("social") ? [{ icon: Users, label: "Social media transfer", value: checklist(SOCIAL_TRANSFER, transfer?.socialDone), wide: true }] : []),
+        ]}
+      />
+      {answeredAny ? (
+        <>
+          <Subhead>Website, domain and brand — from the client</Subhead>
+          <Rows rows={[...site.items, ...domains.items, ...mail.items, ...brand.items].map((item) => answerRow(item, Globe))} />
+          <Subhead>Google accounts — from the client</Subhead>
+          <Rows rows={google.items.map((item) => answerRow(item, MapPin))} />
+          <Subhead>Social media — from the client</Subhead>
+          <Rows rows={[...social.items.map((item) => answerRow(item, Link2)), ...(metaAdsRow ? [metaAdsRow] : [])]} />
+          <Subhead>Photos and videos — from the client</Subhead>
+          <Rows rows={media.items.map((item) => answerRow(item, Camera))} />
+        </>
+      ) : null}
+      {uploads.length ? (
+        <>
+          <Subhead>Files the client uploaded</Subhead>
+          <Uploads groups={uploads} />
+        </>
+      ) : null}
     </>
   );
 };
@@ -839,6 +1303,13 @@ const StatusPicker = ({ clientId, name, status }: { clientId: string; name: stri
 
 const TABS = ["Overview", "Reports", "Content", "Meetings", "Messages", "Payments"];
 
+const LOGIN_STATUS_LABEL: Record<ClientLogin["status"], string> = {
+  pending: "Pending",
+  active: "Active",
+  inactive: "Inactive",
+  blocked: "Blocked",
+};
+
 // The portal password, hidden behind dots until the eye is clicked, with a button to copy it.
 const PasswordValue = ({ password }: { password?: string }) => {
   const [shown, setShown] = useState(false);
@@ -867,21 +1338,17 @@ const PasswordValue = ({ password }: { password?: string }) => {
   );
 };
 
-const LOGIN_STATUS_LABEL: Record<ClientLogin["status"], string> = {
-  pending: "Pending",
-  active: "Active",
-  inactive: "Inactive",
-  blocked: "Blocked",
-};
-
+// `comments` are those on the client's onboarding form, when they could be loaded.
 const ClientDetails = ({
   client,
   canManage,
   canDelete,
+  comments,
 }: {
   client: Client;
   canManage: boolean;
   canDelete: boolean;
+  comments?: OnboardingComment[];
 }) => {
   const [activeTab, setActiveTab] = useState(TABS[0]);
 
@@ -891,15 +1358,6 @@ const ClientDetails = ({
 
   return (
     <>
-      <div className={breadcrumbRow}>
-        <div className={breadcrumbs}>
-          <Link href="/clients" className={breadcrumbLink}>
-            Clients
-          </Link>{" "}
-          / <b>{client.companyName}</b>
-        </div>
-      </div>
-
       <section className="relative rounded-2xl border border-[#e2e8f0] bg-gradient-to-br from-white via-white to-[#f8fbff] px-5 py-5 shadow-[0_8px_24px_rgba(15,23,42,0.04)] sm:px-6">
         <div className="pointer-events-none absolute -top-20 -right-16 size-56 rounded-full bg-[#dbeafe]/45 blur-3xl" />
         <div className="relative flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
@@ -1042,6 +1500,9 @@ const ClientDetails = ({
                 </div>
               </div>
             ) : null}
+
+            {/* Comments on the client's onboarding form: only a client with a portal login can see them. */}
+            {client.onboarding?.status && client.user && comments ? <OnboardingComments clientId={client._id} initial={comments} /> : null}
           </aside>
         </div>
       )}

@@ -1,7 +1,10 @@
 "use client";
 
-import { useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { MessageSquare } from "lucide-react";
+import { listOnboardingCommentsAction, type OnboardingComment } from "@/app/actions/onboarding";
 import type { Client } from "@/app/actions/clients";
+import OnboardingThread from "./OnboardingThread";
 import { GOAL_BUDGETS, GOAL_TIMEFRAMES, LEAD_SOURCES, NONE, REACH_BY, groupsOf, isAnswered, linkOf, money, targetOf, type Item } from "./clientUi";
 
 // Step 4 of the client form: the client's onboarding as the account manager works through it.
@@ -18,12 +21,12 @@ import { GOAL_BUDGETS, GOAL_TIMEFRAMES, LEAD_SOURCES, NONE, REACH_BY, groupsOf, 
 // ── What is shown ────────────────────────────────────────────────────────────
 
 // Where the client stands on an item: they filled it in, they asked for help, or nothing yet.
-type Status = "filled" | "help" | "wait";
+export type Status = "filled" | "help" | "wait";
 // What the client gave for an item, as the credentials view names it.
-type Kind = "login" | "invite" | "link" | "files" | "details" | "help" | "empty";
-type Entry = { id: string; name: string; answer: string; st: Status; kind: Kind; details: Item["details"] };
+export type Kind = "login" | "invite" | "link" | "files" | "details" | "help" | "empty";
+export type Entry = { id: string; name: string; answer: string; st: Status; kind: Kind; details: Item["details"] };
 // `locked` is a step every client has: it can't be taken off.
-type Step = { id: string; title: string; items: Entry[]; locked?: boolean };
+export type Step = { id: string; title: string; items: Entry[]; locked?: boolean };
 
 // What a client isn't asked until the team turns it on: every step but who they are, their
 // website, their business email and their logo. It stands until the team saves ticks of its
@@ -39,7 +42,7 @@ export const tickedIn = (ticks: Ticks) => Object.keys(ticks).filter((id) => tick
 // ids carry it, so that the business email and the email login don't share one.
 const NAMED_UNDER_STEP = ["google", "social", "media"];
 
-const KIND_LABELS: Record<Kind, string> = { login: "Login & password", invite: "Access invite", link: "Link", files: "Files", details: "Details", help: "Needs help", empty: "Nothing yet" };
+export const KIND_LABELS: Record<Kind, string> = { login: "Login & password", invite: "Access invite", link: "Link", files: "Files", details: "Details", help: "Needs help", empty: "Nothing yet" };
 
 // The fields of an item that hold something to copy: a login, or an address.
 const COPIED = ["Login username", "Link or name", "Current website", "Shared folder", "Logo files", "Email"];
@@ -69,7 +72,7 @@ const entryOf = (step: string, item: Item): Entry => {
 };
 
 // Who the client is — the first step, from what the form above holds.
-type About = { contactName: string; companyName: string; email: string; phone: string };
+export type About = { contactName: string; companyName: string; email: string; phone: string };
 
 const aboutStep = (about: About, onboarding?: Client["onboarding"]): Step => {
   const rows = (pairs: [string, string | undefined][]): Item["details"] => pairs.flatMap(([label, value]) => (value?.trim() ? [[label, value.trim()] as [string, string]] : []));
@@ -78,6 +81,8 @@ const aboutStep = (about: About, onboarding?: Client["onboarding"]): Step => {
       ? { id, name, answer: "Submitted", st: "filled", kind: "details", details }
       : { id, name, answer: "No answer yet", st: "wait", kind: "empty", details };
   const { business, goals, kickoffCall } = onboarding ?? {};
+  // Asked only when signing up.
+  const metaAds = onboarding?.social?.metaAds;
   // One item, as on the client's own form: who is answering — with what they said there, and
   // right after signing up, about their business and their goals.
   return {
@@ -103,7 +108,20 @@ const aboutStep = (about: About, onboarding?: Client["onboarding"]): Step => {
           ["New clients per month", targetOf(goals?.newClients, String)],
           ["How soon", GOAL_TIMEFRAMES[goals?.timeframe ?? ""]],
           ["Monthly marketing budget", GOAL_BUDGETS[goals?.budget ?? ""]],
+          ["Cost of one lead today", goals?.costPerLead === undefined ? undefined : money(goals.costPerLead)],
+          ["Worth of one new client", goals?.clientValue === undefined ? undefined : money(goals.clientValue)],
           ["Where leads come from", goals?.leadSources?.map((source) => LEAD_SOURCES[source] ?? source).join(", ")],
+          [
+            "Meta Ads (Facebook / Instagram)",
+            metaAds?.has
+              ? [
+                  metaAds.has === "yes" ? "Has an account" : metaAds.wantsCreated ? "Create the account" : metaAds.has === "unsure" ? "Not sure whether one exists" : "Doesn't have one",
+                  metaAds.link,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : undefined,
+          ],
           ["Kickoff call", kickoffCall ? (kickoffCall.booked ? "Booked (the client says so)" : "Not booked yet") : undefined],
         ]),
         about.contactName && about.companyName && about.email,
@@ -112,7 +130,7 @@ const aboutStep = (about: About, onboarding?: Client["onboarding"]): Step => {
   };
 };
 
-const stepsOf = (about: About, client?: Client): Step[] => [
+export const stepsOf = (about: About, client?: Client): Step[] => [
   aboutStep(about, client?.onboarding),
   ...groupsOf({ onboarding: client?.onboarding ?? { status: "in_progress" } }).map((group) => ({ id: `step:${group.id}`, title: group.title, items: group.items.map((item) => entryOf(group.id, item)) })),
 ];
@@ -127,8 +145,20 @@ const PILLS = {
 } as const;
 type PillTone = keyof typeof PILLS;
 
+// Where a whole step stands — the same three the client sees beside their own form
+// (client-portal: OnboardingProcess → STEP_DOTS): approved once every item on it is, todo while
+// the client still owes an answer, and submitted otherwise. Plus not needed.
+type StepStanding = "approved" | "submitted" | "todo" | "off";
+const STANDINGS: Record<StepStanding, { label: string; pill: string; dot: string; legend: string }> = {
+  approved: { label: "Approved", pill: "bg-[#E8F7EE] text-[#15803D]", dot: "bg-[#16A34A] text-white shadow-[0_0_0_1px_#E5E7EB]", legend: "bg-[#16A34A]" },
+  submitted: { label: "Submitted", pill: "bg-[#E8EEFF] text-[#2F5FD8]", dot: "bg-[#2F5FD8] text-white shadow-[0_0_0_1px_#E5E7EB]", legend: "bg-[#2F5FD8]" },
+  todo: { label: "Todo", pill: "bg-[#FEF3C7] text-[#B45309]", dot: "bg-[#FEF3C7] text-[#B45309] shadow-[0_0_0_2px_#D97706]", legend: "bg-[#FEF3C7] shadow-[0_0_0_2px_#D97706]" },
+  off: { label: "Not needed", pill: "bg-[#F3F4F6] text-[#6B7280]", dot: "bg-[#D1D5DB] text-[#6B7280] shadow-[0_0_0_1px_#E5E7EB]", legend: "bg-[#D1D5DB]" },
+};
+
 const pillClass = "inline-flex items-center gap-1.5 rounded-full px-2.5 py-[5px] text-[12px] whitespace-nowrap";
 const Pill = ({ tone }: { tone: PillTone }) => <span className={`${pillClass} ${PILLS[tone][1]}`}>{PILLS[tone][0]}</span>;
+const StandingPill = ({ standing }: { standing: StepStanding }) => <span className={`${pillClass} font-bold ${STANDINGS[standing].pill}`}>{STANDINGS[standing].label}</span>;
 
 const gridClass = "grid grid-cols-[minmax(0,1fr)_150px_140px_170px_52px] items-center";
 const stepNumClass = "text-[11px] font-bold tracking-[0.06em] text-[#2563eb]";
@@ -257,6 +287,23 @@ const OnboardingControls = ({
   const [open, setOpen] = useState<Ticks>({});
   const flip = (id: string) => (now: Ticks) => ({ ...now, [id]: !now[id] });
 
+  // What the client wrote on their own form, step by step, with the team's replies. Only a
+  // client already saved has any.
+  const clientId = client?._id;
+  const [comments, setComments] = useState<OnboardingComment[]>([]);
+  useEffect(() => {
+    if (!clientId) return;
+    let live = true;
+    void listOnboardingCommentsAction(clientId).then((result) => {
+      if (live && result.ok && result.data) setComments(result.data);
+    });
+    return () => {
+      live = false;
+    };
+  }, [clientId]);
+  const commentsOn = (stepId: string) => comments.filter((comment) => `step:${comment.step}` === stepId);
+  const replaced = (updated: OnboardingComment) => setComments((now) => now.map((comment) => (comment._id === updated._id ? updated : comment)));
+
   // Both views read the same sums.
   const totals = { included: 0, approved: 0, off: 0, filled: 0, help: 0, wait: 0 };
   // The steps the client's own form has, counted as it counts them: one with nothing left to
@@ -277,8 +324,9 @@ const OnboardingControls = ({
     const onItems = items.filter((item) => item.on);
     const apCount = onItems.filter((item) => item.ap).length;
     const hasItems = onItems.length > 0;
-    const status: PillTone = !hasItems ? "off" : onItems.some((item) => item.st === "wait") ? "wait" : onItems.some((item) => item.st === "help") ? "help" : "filled";
-    return { ...step, stepOn, items, onCount: onItems.length, apCount, hasItems, allApproved: hasItems && apCount === onItems.length, status, number: hasItems ? ++asked : 0 };
+    const allApproved = hasItems && apCount === onItems.length;
+    const standing: StepStanding = !hasItems ? "off" : allApproved ? "approved" : onItems.some((item) => item.st === "wait") ? "todo" : "submitted";
+    return { ...step, stepOn, items, onCount: onItems.length, apCount, hasItems, allApproved, standing, number: hasItems ? ++asked : 0 };
   });
   // "Step 3 of 7", as the client reads it on their form.
   const numberOf = (step: (typeof shown)[number]) => (step.number ? `STEP ${step.number} OF ${asked}` : "NOT ON THE CLIENT\u2019S FORM");
@@ -331,7 +379,7 @@ const OnboardingControls = ({
                       <Tick label="Client needs" checked={step.stepOn} disabled={step.locked} onChange={() => setOff(flip(step.id))} />
                       <Tick label="Approved" checked={step.allApproved} disabled={!step.hasItems} onChange={() => approveStep(step)} />
                       <div>
-                        <Pill tone={step.status} />
+                        <StandingPill standing={step.standing} />
                       </div>
                       <button
                         type="button"
@@ -379,33 +427,28 @@ const OnboardingControls = ({
             <div className="overflow-x-auto pb-1">
               <div className="relative grid min-w-[880px]" style={{ gridTemplateColumns: `repeat(${shown.length}, minmax(110px, 1fr))` }}>
                 {shown.map((step) => {
-                  const dot = !step.hasItems
-                    ? "bg-[#D1D5DB] text-[#6B7280] shadow-[0_0_0_1px_#E5E7EB]"
-                    : step.allApproved
-                      ? "bg-[#16A34A] text-white shadow-[0_0_0_1px_#E5E7EB]"
-                      : step.status === "wait"
-                        ? "bg-[#D97706] text-white shadow-[0_0_0_1px_#E5E7EB]"
-                        : step.status === "help"
-                          ? "bg-[#7C3AED] text-white shadow-[0_0_0_1px_#E5E7EB]"
-                          : "bg-white text-[#15803D] shadow-[0_0_0_2px_#16A34A]";
+                  const dot = STANDINGS[step.standing].dot;
                   return (
                     <div key={step.id} className={`relative flex flex-col items-center gap-2 px-1.5 text-center ${lineClass} before:top-[15px] before:z-0 before:h-1 ${step.allApproved ? "before:bg-[#16A34A]" : "before:bg-[#D1D5DB]"}`}>
                       <div className={`relative z-[1] flex size-[34px] items-center justify-center rounded-full border-[3px] border-white text-[13px] font-extrabold ${dot}`}>
                         {step.allApproved ? <TickMark size={14} /> : step.number || "–"}
                       </div>
                       <div className="text-[13px] font-bold">{step.title}</div>
-                      <div className="text-[11px] font-semibold text-[#6B7280]">{!step.hasItems ? "Not needed" : step.allApproved ? "Approved" : `${step.apCount}/${step.onCount} approved`}</div>
+                      <div className="text-[11px] font-semibold text-[#6B7280]">
+                        {STANDINGS[step.standing].label}
+                        {step.hasItems && !step.allApproved ? ` · ${step.apCount}/${step.onCount} approved` : ""}
+                      </div>
                     </div>
                   );
                 })}
               </div>
             </div>
             <div className="mt-4 flex flex-wrap gap-3.5 text-[12px] text-[#374151]">
-              <Legend dot="bg-[#16A34A]">Approved</Legend>
-              <Legend dot="bg-white shadow-[0_0_0_2px_#16A34A]">Partly approved</Legend>
-              <Legend dot="bg-[#7C3AED]">Client needs help</Legend>
-              <Legend dot="bg-[#D97706]">Waiting on client</Legend>
-              <Legend dot="bg-[#D1D5DB]">Not needed</Legend>
+              {(Object.keys(STANDINGS) as StepStanding[]).map((standing) => (
+                <Legend key={standing} dot={STANDINGS[standing].legend}>
+                  {STANDINGS[standing].label}
+                </Legend>
+              ))}
             </div>
           </section>
 
@@ -418,12 +461,17 @@ const OnboardingControls = ({
                     <div className="text-[15.5px] font-bold">{step.title}</div>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    {commentsOn(step.id).length ? (
+                      <span className={`${pillClass} bg-[#E8EEFF] font-bold text-[#1E3A8A]`}>
+                        <MessageSquare size={12} strokeWidth={2.25} /> {commentsOn(step.id).length}
+                      </span>
+                    ) : null}
                     {step.hasItems ? (
                       <span className={`${pillClass} bg-[#F3F4F6] font-bold text-[#374151]`}>
                         {step.apCount} of {step.onCount} approved
                       </span>
                     ) : null}
-                    <Pill tone={step.status} />
+                    <StandingPill standing={step.standing} />
                   </div>
                 </div>
                 {step.items.map((item, at) => (
@@ -448,6 +496,7 @@ const OnboardingControls = ({
                     </div>
                   </div>
                 ))}
+                {clientId ? <OnboardingThread clientId={clientId} comments={commentsOn(step.id)} onChange={replaced} /> : null}
               </section>
             ))}
           </div>

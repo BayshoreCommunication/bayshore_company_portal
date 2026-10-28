@@ -412,11 +412,26 @@ const yesNo = (value?: boolean) => (value === undefined ? NONE : value ? "Yes" :
 const ticked = (value?: boolean) => (value ? "Yes" : "No");
 const listed = (values?: string[]) => (values?.length ? values.join(", ") : NONE);
 
-// The two fields every platform we need access to has.
-const accessFields = (entry: { accessGiven?: boolean; needsHelp?: boolean }): Item["details"] => [
-  ["Access given", ticked(entry.accessGiven)],
-  ["Needs help with access", ticked(entry.needsHelp)],
-];
+// Where access to a platform stands, in one field: given, stuck, or still to do. "Needs help"
+// only shows when they asked for it — not beside an access already given.
+const accessFields = (entry: { accessGiven?: boolean; needsHelp?: boolean }): Item["details"] =>
+  entry.accessGiven ? [["Access given", "Yes"]] : entry.needsHelp ? [["Needs help with access", "Yes — help them give it"]] : [["Access given", NONE]];
+
+// Access to a platform (the domain, hosting, the website's login): how they give it, and then
+// either the login they shared or where the invite stands.
+type PlatformLogin = { access?: "invite" | "secure"; loginUsername?: string; loginPassword?: string; loginPasswordSet?: boolean; accessGiven?: boolean; needsHelp?: boolean };
+const loginShared = (entry: PlatformLogin) => Boolean(entry.loginUsername && (entry.loginPassword || entry.loginPasswordSet));
+const platformAccessFields = (entry: PlatformLogin): Item["details"] =>
+  entry.access === "secure"
+    ? [
+        ["How they give access", "Sharing the login"],
+        ["Login username", written(entry.loginUsername)],
+        // The password itself is sealed and isn't shown; this says whether one was given.
+        ["Login password", entry.loginPassword || entry.loginPasswordSet ? "Saved (encrypted)" : NONE],
+      ]
+    : [["How they give access", "Inviting our access email"], ...accessFields(entry)];
+const platformAccessStanding = (entry: PlatformLogin): Standing =>
+  entry.access === "secure" ? (loginShared(entry) ? ["Login shared", "ready"] : ["Waiting for the login", "waiting"]) : inviting(entry);
 
 // Access being given by invite: given, stuck, or still to do.
 const inviting = (entry: { accessGiven?: boolean; needsHelp?: boolean }): Standing =>
@@ -430,7 +445,7 @@ const platformStanding = (entry: NonNullable<OnboardingAnswers["domain"]>, creat
     if (!entry.platform) return ["Platform not chosen", "waiting"];
     if (entry.platform === NOT_SURE) return ["Help them find it", "followup"];
     if (hosted && BUILDERS.includes(entry.platform)) return ["Included with their site builder", "ready"];
-    return inviting(entry);
+    return platformAccessStanding(entry);
   }
   if (entry.has === "no") return wanted(entry.wantsCreated, creating);
   if (entry.has === "unsure") return ["Find out for them", "followup"];
@@ -470,28 +485,41 @@ const accountItem = (id: string, name: string, account: OnboardingAccount = {}, 
     name,
     label: standing[0],
     tone: standing[1],
+    // Only what goes with their answer: how we get in, for an account they have; whether to make
+    // one, for an account they don't (or aren't sure of).
     details: [
       ["Has an account", having(account.has)],
-      ["Link or name", written(account.link)],
-      // Only asked of Instagram.
-      ...(id === "instagram" ? ([["Already connected to their Facebook Page", ticked(account.connected)]] as Item["details"]) : []),
-      [
-        "How they give access",
-        viaFacebook
-          ? "Through their Facebook Page (posting only)"
-          : account.access === "invite"
-            ? id === "facebook"
-              ? "Adding our Facebook profile to their Page"
-              : "Inviting our access email"
-            : account.access === "secure"
-              ? "Sharing the login"
-              : NONE,
-      ],
-      ["Login username", written(account.loginUsername)],
-      // The password itself is sealed and isn't shown; this says whether one was given.
-      ["Login password", account.loginPassword ? "Saved (encrypted)" : NONE],
-      ...accessFields(account),
-      ["Wants us to create it", yesNo(account.wantsCreated)],
+      ...(account.has === "yes"
+        ? ([
+            ["Link or name", written(account.link)],
+            // Only asked of Instagram.
+            ...(id === "instagram" ? ([["Already connected to their Facebook Page", ticked(account.connected)]] as Item["details"]) : []),
+            [
+              "How they give access",
+              viaFacebook
+                ? "Through their Facebook Page (posting only)"
+                : account.access === "invite"
+                  ? id === "facebook"
+                    ? "Adding our Facebook profile to their Page"
+                    : "Inviting our access email"
+                  : account.access === "secure"
+                    ? "Sharing the login"
+                    : NONE,
+            ],
+            // A login is only theirs to give when that is how they give access.
+            ...(account.access === "secure"
+              ? ([
+                  ["Login username", written(account.loginUsername)],
+                  // The password itself is sealed and isn't shown; this says whether one was given.
+                  ["Login password", account.loginPassword || account.loginPasswordSet ? "Saved (encrypted)" : NONE],
+                ] as Item["details"])
+              : []),
+            // Through the Facebook Page, access to the Page is the access: nothing of its own.
+            ...(viaFacebook ? [] : accessFields(account)),
+          ] as Item["details"])
+        : account.has === "no" || account.has === "unsure"
+          ? ([["Wants us to create it", yesNo(account.wantsCreated)]] as Item["details"])
+          : []),
     ],
   };
 };
@@ -516,9 +544,13 @@ const mediaItem = (id: string, name: string, media: OnboardingMedia = {}): Item 
     tone: standing[1],
     details: [
       ["What they chose", media.mode === "upload" ? "Share what they have" : media.mode === "create" ? "They need these created" : media.mode === "none" ? "They don't need these" : NONE],
-      ["Uploaded", media.files?.length ? `${media.files.length} file${media.files.length === 1 ? "" : "s"}` : NONE],
-      ["Shared folder", written(media.link)],
-      ["What they need", written(media.notes)],
+      ...(media.mode === "upload" || media.files?.length || media.link
+        ? ([
+            ["Uploaded", media.files?.length ? `${media.files.length} file${media.files.length === 1 ? "" : "s"}` : NONE],
+            ["Shared folder", written(media.link)],
+          ] as Item["details"])
+        : []),
+      ...(media.mode === "create" ? ([["What they need", written(media.notes)]] as Item["details"]) : []),
     ],
   };
 };
@@ -530,13 +562,13 @@ const GOOGLE_NAMES: Record<OnboardingGoogleAccount, string> = {
   tagManager: "Google Tag Manager",
   ads: "Google Ads",
 };
-const SOCIAL_NAMES: Record<OnboardingSocialAccount, string> = {
+// X (Twitter) is no longer on the client's form, so it isn't one of its items.
+const SOCIAL_NAMES: Record<Exclude<OnboardingSocialAccount, "x">, string> = {
   facebook: "Facebook Page",
   instagram: "Instagram",
   youtube: "YouTube",
   linkedin: "LinkedIn Company Page",
   tiktok: "TikTok",
-  x: "X (Twitter)",
   email: "Email",
 };
 const MEDIA_NAMES: Record<OnboardingMediaKind, string> = {
@@ -555,13 +587,26 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
   const websiteStanding: Standing =
     website.need === "new" ? ["Build a new website", "create"] : website.need === "redesign" ? ["Redesign their website", "create"] : website.need === "no" ? ["Keeping their current site", "ready"] : NOT_ANSWERED;
 
-  const cmsStanding: Standing = !cms.platform
+  // Hosting on a site builder is its own CMS; with a hosting account of their own and a CMS, they
+  // chose what to let us into (cms.giving). A CMS named before that was asked means there is one.
+  const onBuilder = hosting.has === "yes" && Boolean(hosting.platform) && BUILDERS.includes(hosting.platform ?? "");
+  const hasCms = onBuilder ? "yes" : (cms.has ?? (cms.platform ? "yes" : undefined));
+  const giving = onBuilder || hosting.has !== "yes" ? "cms" : cms.giving;
+  // A CMS whose dashboard is all they give: the hosting needs nothing more from them.
+  const dashboardOnly = hasCms === "yes" && giving === "cms" && hosting.has === "yes" && !onBuilder && !website.hasNone;
+  const cmsStanding: Standing = hasCms === "no"
+    ? ["No CMS — hosting is enough", "ready"]
+    : hasCms === "unsure"
+      ? ["Find out whether there is one", "followup"]
+      : giving === "hosting"
+        ? ["Through their hosting", "ready"]
+        : !cms.platform
     ? NOT_ANSWERED
     : cms.platform === NOT_SURE
       ? ["Help them find it", "followup"]
       : cms.developer || cms.platform === BUILT_BY_DEVELOPER
         ? ["Contact their developer for access", "followup"]
-        : inviting(cms);
+        : platformAccessStanding(cms);
 
   const emailStanding: Standing = email.has === "yes" ? ["Has one", "ready"] : email.has === "no" ? wanted(email.wantsCreated, "Set up Google Workspace") : NOT_ANSWERED;
 
@@ -587,10 +632,15 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
         item("website", "Website", websiteStanding, [
           ["Current website", website.hasNone ? "No website yet" : written(website.url)],
           ["Needs a new website", website.need === "new" ? "Yes, build a new one" : website.need === "redesign" ? "Redesign the current site" : website.need === "no" ? "No, not right now" : NONE],
-          ["How they want it", written(website.description)],
-          ["Example websites", examples.length ? examples.join("\n") : NONE],
-          ["Pages", listed(website.pages)],
-          ["Features", listed(website.features)],
+          // What they want of it: only when we are to build or redesign it.
+          ...(website.need === "no"
+            ? []
+            : ([
+                ["How they want it", written(website.description)],
+                ["Example websites", examples.length ? examples.join("\n") : NONE],
+                ["Pages", listed(website.pages)],
+                ["Features", listed(website.features)],
+              ] as Item["details"])),
         ]),
       ],
     },
@@ -600,20 +650,48 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
       items: [
         item("domain", "Domain name", platformStanding(domain, "Register a domain"), [
           ["Has a domain", having(domain.has)],
-          ["Domain", written(domain.name)],
-          ["Registered at", written(domain.platform)],
-          ...accessFields(domain),
-          ["Wants us to register one", yesNo(domain.wantsCreated)],
-          ["Names they'd like", written(domain.wishlist)],
+          ...(domain.has === "yes"
+            ? ([["Domain", written(domain.name)], ["Registered at", written(domain.platform)], ...platformAccessFields(domain)] as Item["details"])
+            : domain.has === "no"
+              ? ([
+                  ["Wants us to register one", yesNo(domain.wantsCreated)],
+                  ...(domain.wantsCreated === false ? [] : ([["Names they'd like", written(domain.wishlist)]] as Item["details"])),
+                ] as Item["details"])
+              : []),
         ]),
-        item("hosting", "Hosting", platformStanding(hosting, "Set up hosting", true), [
+        item("hosting", "Hosting", dashboardOnly ? ["Dashboard access instead", "ready"] : platformStanding(hosting, "Set up hosting", true), [
           ["Has hosting", having(hosting.has)],
-          ["Hosted at", written(hosting.platform)],
-          ...accessFields(hosting),
-          ["Wants us to set it up", yesNo(hosting.wantsCreated)],
+          ...(hosting.has === "yes"
+            ? ([
+                ["Hosted at", written(hosting.platform)],
+                // A site builder hosts the site itself: there is no hosting account to get into. And
+                // with only the website's dashboard given, the hosting isn't ours to get into either.
+                ...(hosting.platform && BUILDERS.includes(hosting.platform)
+                  ? []
+                  : dashboardOnly
+                    ? ([["Hosting access", "Not needed — they gave the website dashboard"]] as Item["details"])
+                    : platformAccessFields(hosting)),
+              ] as Item["details"])
+            : hosting.has === "no"
+              ? ([["Wants us to set it up", yesNo(hosting.wantsCreated)]] as Item["details"])
+              : []),
         ]),
         // Without a website there is no login to it: the client's form doesn't ask either.
-        ...(website.hasNone ? [] : [item("cms", "Website login (CMS)", cmsStanding, [["Built with", written(cms.platform)], ["Developer", written(cms.developer)], ...accessFields(cms)])]),
+        ...(website.hasNone ? [] : [
+              item("cms", "Website login (CMS)", cmsStanding, [
+                ["Built on a CMS", onBuilder ? `Yes — ${hosting.platform}` : having(hasCms)],
+                ...(hasCms === "yes" && !onBuilder && hosting.has === "yes"
+                  ? ([["Access they give", giving === "cms" ? "Website dashboard" : giving === "hosting" ? "Hosting account" : giving === "both" ? "Both" : NONE]] as Item["details"])
+                  : []),
+                // Which CMS, and our way into its dashboard: only when that is what they give us.
+                ...(hasCms === "yes" && giving !== "hosting"
+                  ? ([
+                      ["Built with", written(cms.platform)],
+                      ...(cms.developer || cms.platform === BUILT_BY_DEVELOPER ? ([["Developer", written(cms.developer)]] as Item["details"]) : platformAccessFields(cms)),
+                    ] as Item["details"])
+                  : []),
+              ]),
+            ]),
       ],
     },
     {
@@ -622,10 +700,19 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
       items: [
         item("email", "Business email", emailStanding, [
           ["Has a business email", having(email.has)],
-          ["Provider", written(email.provider)],
-          ["Wants Google Workspace set up", yesNo(email.wantsCreated)],
-          ["Accounts wanted", written(email.accounts)],
-          ["Addresses wanted", written(email.addresses)],
+          ...(email.has === "yes"
+            ? ([["Provider", written(email.provider)]] as Item["details"])
+            : email.has === "no"
+              ? ([
+                  ["Wants Google Workspace set up", yesNo(email.wantsCreated)],
+                  ...(email.wantsCreated
+                    ? ([
+                        ["Accounts wanted", written(email.accounts)],
+                        ["Addresses wanted", written(email.addresses)],
+                      ] as Item["details"])
+                    : []),
+                ] as Item["details"])
+              : []),
         ]),
       ],
     },
@@ -635,11 +722,22 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
       items: [
         item("logo", "Logo", logoStanding, [
           ["Has a logo", having(logo.has)],
-          ["Uploaded", logo.files?.length ? `${logo.files.length} file${logo.files.length === 1 ? "" : "s"}` : NONE],
-          ["Logo files", written(logo.link)],
-          ["Wants us to design one", yesNo(logo.wantsCreated)],
-          ["Style they'd like", written(logo.style)],
-          ["Attached to the style", logo.styleFiles?.length ? `${logo.styleFiles.length} file${logo.styleFiles.length === 1 ? "" : "s"}` : NONE],
+          ...(logo.has === "yes"
+            ? ([
+                ["Uploaded", logo.files?.length ? `${logo.files.length} file${logo.files.length === 1 ? "" : "s"}` : NONE],
+                ["Logo files", written(logo.link)],
+              ] as Item["details"])
+            : logo.has === "no"
+              ? ([
+                  ["Wants us to design one", yesNo(logo.wantsCreated)],
+                  ...(logo.wantsCreated
+                    ? ([
+                        ["Style they'd like", written(logo.style)],
+                        ["Attached to the style", logo.styleFiles?.length ? `${logo.styleFiles.length} file${logo.styleFiles.length === 1 ? "" : "s"}` : NONE],
+                      ] as Item["details"])
+                    : []),
+                ] as Item["details"])
+              : []),
         ]),
       ],
     },

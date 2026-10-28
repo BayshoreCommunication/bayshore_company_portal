@@ -39,6 +39,12 @@ export interface ClientServicePlan {
   included: string[];
   // Rates to quote if the client asks for more later. Not billed now.
   addons: { label: string; price: number }[];
+  // A service the team named itself: priced each month (`monthly`) or once (`oneTime`).
+  custom?: boolean;
+  oneTime?: number;
+  // For one paid once: when it is due (yyyy-mm-dd), and/or how long it takes.
+  deadline?: string;
+  duration?: string;
 }
 
 export type ClientSocial = "facebook" | "instagram" | "linkedin" | "tiktok" | "youtube" | "x";
@@ -120,6 +126,9 @@ export interface Client {
   termsAcceptedAt?: string;
   createdAt: string;
   updatedAt: string;
+  // Services the client asked for from their portal: open until the team adds one as a service
+  // (or sets it aside).
+  serviceRequests?: { _id: string; name: string; note?: string; status: "open" | "added" | "dismissed"; requestedAt: string }[];
 }
 
 export interface ClientListData {

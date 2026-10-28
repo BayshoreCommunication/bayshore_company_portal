@@ -6,9 +6,10 @@ import { canManageClients } from "@/component/clients/clientUi";
 import { formErrorBanner } from "@/component/shared/ui";
 
 // Opened from a card on the clients list (?from=list), Cancel goes back to the list; otherwise
-// to the client's own page.
-const EditClientPage = async ({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ from?: string }> }) => {
-  const [{ slug }, { from }] = await Promise.all([params, searchParams]);
+// to the client's own page. Opened from one part's Edit on that page (?section=2), only that
+// part of the form shows.
+const EditClientPage = async ({ params, searchParams }: { params: Promise<{ slug: string }>; searchParams: Promise<{ from?: string; section?: string }> }) => {
+  const [{ slug }, { from, section }] = await Promise.all([params, searchParams]);
   const [session, result, staff] = await Promise.all([auth(), getClientAction(slug), listStaffAction()]);
 
   if (!canManageClients(session?.user?.role)) redirect(`/clients/${slug}`);
@@ -22,7 +23,7 @@ const EditClientPage = async ({ params, searchParams }: { params: Promise<{ slug
     );
   }
 
-  return <ClientEdit client={result.data} staff={staff} backHref={from === "list" ? "/clients" : undefined} />;
+  return <ClientEdit client={result.data} staff={staff} backHref={from === "list" ? "/clients" : undefined} only={Number(section) || undefined} />;
 };
 
 export default EditClientPage;
