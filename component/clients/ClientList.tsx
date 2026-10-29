@@ -32,13 +32,12 @@ import {
   CLIENT_STATUS_OPTIONS,
   avatarColorFor,
   clientsHref,
-  countsOf,
   formatDate,
-  groupsOf,
   initialsOf,
   statusClassName,
   statusLabel,
 } from "./clientUi";
+import { onboardingProgressOf } from "./OnboardingControls";
 
 const SEARCH_DELAY_MS = 400;
 
@@ -52,12 +51,10 @@ const cardButton =
   "inline-flex flex-1 cursor-pointer items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-[12px] font-semibold no-underline transition-colors";
 const cardLine = "flex min-w-0 items-center gap-2 text-[12px] text-[#64748b]";
 
-// How far through the onboarding form the client is, as a percentage: the questions answered,
-// out of all of them (counted as the onboarding's own page counts them). A client who was never
-// sent through the form has answered none.
+// How far through the onboarding the client is, as a percentage — counted as the client's own form
+// counts it, whoever filled the answers in (onboardingProgressOf).
 const Progress = ({ client }: { client: Client }) => {
-  const { answered, total } = countsOf(groupsOf({ onboarding: client.onboarding ?? { status: "in_progress" } }));
-  const percent = total ? Math.round((answered / total) * 100) : 0;
+  const { percent } = onboardingProgressOf(client);
 
   return (
     <span className="inline-flex shrink-0 items-center gap-1.5">

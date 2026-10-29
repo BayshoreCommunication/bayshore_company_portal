@@ -33,6 +33,22 @@ export type Step = { id: string; title: string; items: Entry[]; locked?: boolean
 // own — and it is the client's form's list too (client-portal: onboardingData.ts → DEFAULT_NOT_NEEDED).
 export const DEFAULT_NOT_NEEDED = ["step:domain", "step:google", "step:social", "step:media"];
 
+// How far through the onboarding a client is — counted as their own form counts it (client-portal:
+// OnboardingProcess → "Your progress"): the items they are asked (not those the team left off),
+// and who they are. Whoever filled an answer in, the client or the team, it counts the same.
+export const onboardingProgressOf = (client: Pick<Client, "onboarding" | "contactName" | "companyName" | "email">) => {
+  const notNeeded = new Set(client.onboarding?.notNeeded ?? DEFAULT_NOT_NEEDED);
+  const items = groupsOf({ onboarding: client.onboarding ?? { status: "in_progress" } })
+    .filter((group) => !notNeeded.has(`step:${group.id}`))
+    .flatMap((group) => group.items.map((item) => ({ item, id: ["google", "social", "media"].includes(group.id) ? `${group.id}.${item.id}` : item.id })))
+    .filter(({ id }) => !notNeeded.has(id));
+  // Who they are ("Your details"): always asked, and filled in once their name, company and email are.
+  const contactDone = Boolean(client.contactName?.trim() && client.companyName?.trim() && client.email?.trim());
+  const answered = items.filter(({ item }) => isAnswered(item)).length + (contactDone ? 1 : 0);
+  const total = items.length + 1;
+  return { answered, total, percent: Math.round((answered / total) * 100) };
+};
+
 // The ticks, by the id of the step or item: what the client doesn't need, and what is approved.
 export type Ticks = Record<string, boolean>;
 export const ticksOf = (ids: string[] = []): Ticks => Object.fromEntries(ids.map((id) => [id, true]));

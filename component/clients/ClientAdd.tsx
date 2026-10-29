@@ -67,11 +67,9 @@ import {
   ONBOARDING_STATUS_LABELS,
   REACH_BY,
   contractEnd,
-  countsOf,
   avatarColorFor,
   formatDate,
   formatDateTime,
-  groupsOf,
   initialsOf,
   money,
   portalMenusOf,
@@ -82,7 +80,7 @@ import {
 import { FileManager, type UploadKind } from "./OnboardingReview";
 import type { OnboardingFile } from "@/app/actions/onboarding";
 import { ONBOARDING_STEPS } from "./StepTicks";
-import { DEFAULT_NOT_NEEDED, tickedIn, ticksOf } from "./OnboardingControls";
+import { DEFAULT_NOT_NEEDED, onboardingProgressOf, tickedIn, ticksOf } from "./OnboardingControls";
 
 // The form a client is added with — and edited with: five parts (who they are, their
 // business, what they are buying, what is being taken over from them, and their contract and
@@ -700,8 +698,7 @@ const hasFrom = (client?: Client): string[] | undefined => {
 // answers live on their record; keeping the sidebar short makes the form easier to work through.
 const ClientSaid = ({ client }: { client: Client }) => {
   const said = client.onboarding;
-  const { answered, total } = countsOf(groupsOf({ onboarding: said ?? { status: "in_progress" } }));
-  const progress = total ? Math.round((answered / total) * 100) : 0;
+  const progress = onboardingProgressOf(client).percent;
   const activities: [label: string, value: string, tone: "green" | "amber" | "slate"][] = [
     ["Client added", formatDate(client.createdAt), "green"],
     ["Latest update", formatDateTime(client.updatedAt), "slate"],
