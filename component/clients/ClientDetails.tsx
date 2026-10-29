@@ -612,8 +612,8 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
     { icon: Briefcase, label: "Industry", value: business?.industry },
     { icon: Building2, label: "Business type", value: business?.businessType },
     { icon: Layers, label: "Services they offer", value: listed(about?.services), wide: true },
-    // The team's own words for it; else the client's — unless those are already the location.
-    { icon: Target, label: "Areas they serve", value: business?.serviceArea || (client.address?.trim() ? areasLine : areasLine ? "Same as the location" : undefined), wide: true },
+    // The team's own words for it; else the areas the client gave ("Areas you serve").
+    { icon: Target, label: "Areas they serve", value: business?.serviceArea || areasLine, wide: true },
     { icon: Users, label: "Target audience", value: business?.targetAudience },
     { icon: StickyNote, label: "Other details", value: business?.otherDetails, wide: true },
   ];
