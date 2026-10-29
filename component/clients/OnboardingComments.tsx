@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { CheckCircle2, ArrowRight, ChevronDown, FileText, Loader2, MessageSquare, Paperclip, Send, X } from "lucide-react";
-import type { OnboardingComment, OnboardingCommentFile } from "@/app/actions/onboarding";
+import { listOnboardingCommentsAction, type OnboardingComment, type OnboardingCommentFile } from "@/app/actions/onboarding";
 import { formatFileSize } from "@/component/projects/projectUi";
 import { sendWithProgress } from "@/lib/sendWithProgress";
-import { useRealtime } from "@/lib/realtime";
+import { useRealtime, useRefreshing } from "@/lib/realtime";
 
 // Beside a client's record (ClientDetails): the comments on their onboarding form — the client's
 // and the team's — and a box to write one on a step of it, which the client sees on that step of
@@ -96,6 +96,10 @@ const OnboardingComments = ({
   useRealtime<OnboardingComment & { client?: string }>("onboarding:comment", (comment) => {
     if (shared || (comment.client && comment.client !== clientId)) return;
     setOwn((now) => (now.some((entry) => entry._id === comment._id) ? now.map((entry) => (entry._id === comment._id ? comment : entry)) : [...now, comment]));
+  });
+  // And reloaded now and then, in case the live connection is down.
+  useRefreshing(() => {
+    if (!shared) void listOnboardingCommentsAction(clientId).then((result) => result.ok && result.data && setOwn(result.data));
   });
   const [step, setStep] = useState("contact");
   const [draft, setDraft] = useState("");

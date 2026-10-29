@@ -59,12 +59,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { updateClientAction, type Client } from "@/app/actions/clients";
-import { removeClientOnboardingFileAction, revealOnboardingPasswordAction, updateClientOnboardingAction, type OnboardingAnswers, type OnboardingComment, type OnboardingFile } from "@/app/actions/onboarding";
+import { listOnboardingCommentsAction, removeClientOnboardingFileAction, revealOnboardingPasswordAction, updateClientOnboardingAction, type OnboardingAnswers, type OnboardingComment, type OnboardingFile } from "@/app/actions/onboarding";
 import { answersFrom, fieldsOf as editFieldsOf, valueOf, type FieldDef } from "./onboardingFields";
 import { formatFileSize } from "@/component/projects/projectUi";
 import OnboardingComments from "./OnboardingComments";
 import StepTicks from "./StepTicks";
-import { useRealtime } from "@/lib/realtime";
+import { useRealtime, useRefreshing } from "@/lib/realtime";
 import { NONE } from "./clientUi";
 import { DEFAULT_NOT_NEEDED, KIND_LABELS, stepsOf, tickedIn, ticksOf, type Entry, type Step, type Ticks } from "./OnboardingControls";
 
@@ -670,6 +670,8 @@ const OnboardingReview = ({
     if (comment.client && comment.client !== client._id) return;
     setComments((now) => (now.some((entry) => entry._id === comment._id) ? now.map((entry) => (entry._id === comment._id ? comment : entry)) : [...now, comment]));
   });
+  // And reloaded now and then, in case the live connection is down.
+  useRefreshing(() => void listOnboardingCommentsAction(client._id).then((result) => result.ok && result.data && setComments(result.data)));
   const commentsOn = (step: Step) => comments.filter((comment) => `step:${comment.step}` === step.id);
 
   const submittedAt = client.onboarding?.submittedAt

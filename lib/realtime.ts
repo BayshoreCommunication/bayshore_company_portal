@@ -59,3 +59,23 @@ export const useRealtime = <Payload,>(event: string, handler: (payload: Payload)
     };
   }, [event]);
 };
+
+// Calls `refresh` every half minute, and whenever the tab is looked at again — so what should
+// come live still comes, a little later, if the live connection is down.
+export const useRefreshing = (refresh: () => void, ms = 30_000) => {
+  const latest = useRef(refresh);
+  useEffect(() => {
+    latest.current = refresh;
+  });
+  useEffect(() => {
+    const run = () => {
+      if (document.visibilityState === "visible") latest.current();
+    };
+    const timer = setInterval(run, ms);
+    document.addEventListener("visibilitychange", run);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", run);
+    };
+  }, [ms]);
+};
