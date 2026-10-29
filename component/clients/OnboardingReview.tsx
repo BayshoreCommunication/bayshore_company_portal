@@ -7,8 +7,6 @@ import {
   ArrowLeft,
   Trash2,
   Upload as UploadIcon,
-  Copy,
-  Eye,
   ExternalLink,
   FileImage,
   FileVideo,
@@ -59,6 +57,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { getClientAction, updateClientAction, type Client } from "@/app/actions/clients";
+import { PasswordEye } from "@/component/shared/PasswordModal";
 import { listOnboardingCommentsAction, removeClientOnboardingFileAction, revealOnboardingPasswordAction, updateClientOnboardingAction, type OnboardingAnswers, type OnboardingComment, type OnboardingFile } from "@/app/actions/onboarding";
 import { answersFrom, fieldsOf as editFieldsOf, valueOf, type FieldDef } from "./onboardingFields";
 import { formatFileSize } from "@/component/projects/projectUi";
@@ -433,46 +432,11 @@ const ItemEditor = ({ clientId, onboarding, fields, onSaved }: { clientId: strin
   );
 };
 
-// A password the client shared: hidden until the eye is clicked, which opens it on the backend
-// (only for those who manage clients), with a button to copy it.
-const PasswordReveal = ({ clientId, login }: { clientId: string; login: string }) => {
-  const [password, setPassword] = useState<string | null>(null);
-  const [shown, setShown] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const toggle = async () => {
-    if (shown) return setShown(false);
-    if (password === null) {
-      setLoading(true);
-      const result = await revealOnboardingPasswordAction(clientId, login);
-      setLoading(false);
-      if (!result.ok || !result.data) return void toast.error(result.error ?? "Couldn't show the password.");
-      setPassword(result.data.password);
-    }
-    setShown(true);
-  };
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(password ?? "");
-      toast.success("Password copied");
-    } catch {
-      toast.error("Couldn't copy the password.");
-    }
-  };
-  const iconButton = "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#2563eb] disabled:cursor-wait";
-  return (
-    <span className="flex min-w-0 items-center gap-1">
-      <span className="min-w-0 font-mono break-all">{shown && password !== null ? password : "••••••••"}</span>
-      <button type="button" aria-label={shown ? "Hide password" : "Show password"} onClick={() => void toggle()} disabled={loading} className={iconButton}>
-        {loading ? <Loader2 size={13} className="animate-spin" /> : shown ? <EyeOff size={13} strokeWidth={2} /> : <Eye size={13} strokeWidth={2} />}
-      </button>
-      {shown && password !== null ? (
-        <button type="button" aria-label="Copy password" onClick={() => void copy()} className={iconButton}>
-          <Copy size={13} strokeWidth={2} />
-        </button>
-      ) : null}
-    </span>
-  );
-};
+// A password the client shared: the eye opens it behind the security code (PasswordEye), only for
+// those who manage clients.
+const PasswordReveal = ({ clientId, login }: { clientId: string; login: string }) => (
+  <PasswordEye label="Password" load={() => revealOnboardingPasswordAction(clientId, login)} />
+);
 
 // The files the client uploaded for an item: their logo (and what shows the style they'd like),
 // or each kind of photos and videos.

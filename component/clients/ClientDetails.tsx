@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, useTransition, type ReactNode } fro
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRealtime } from "@/lib/realtime";
+import { PasswordEye } from "@/component/shared/PasswordModal";
 import toast from "react-hot-toast";
 import {
   AlertTriangle,
@@ -27,11 +28,8 @@ import {
   ChevronDown,
   ClipboardList,
   Clock,
-  Copy,
   CreditCard,
   DollarSign,
-  Eye,
-  EyeOff,
   FileText,
   Globe,
   Layers,
@@ -58,7 +56,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { deleteClientAction, updateClientAction, type Client, type ClientLogin, type ClientStatus } from "@/app/actions/clients";
+import { deleteClientAction, getClientPortalPasswordAction, updateClientAction, type Client, type ClientLogin, type ClientStatus } from "@/app/actions/clients";
 import type { OnboardingAnswers, OnboardingComment, OnboardingFile, OnboardingRequest } from "@/app/actions/onboarding";
 import {
   CLIENT_HAS,
@@ -730,15 +728,15 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
     {
       icon: Lock,
       label: "Portal password",
-      value: client.portalPassword
-        ? client.portalPassword
+      value: client.hasPortalPassword
+        ? "Hidden"
         : !client.user
           ? "No portal login"
           : !editHref
             ? "Only managers can see it"
             : "Not saved — set a new password on Edit Client to see it",
-      tone: client.portalPassword ? undefined : "none",
-      content: client.portalPassword ? <PasswordValue password={client.portalPassword} /> : undefined,
+      tone: client.hasPortalPassword ? undefined : "none",
+      content: client.hasPortalPassword ? <PasswordValue clientId={client._id} /> : undefined,
     },
     { icon: Users, label: "Assigned staff", value: team.join(", ") },
     // No choice made is every page. Settings is always there, so it isn't among them.
@@ -1339,32 +1337,12 @@ const LOGIN_STATUS_LABEL: Record<ClientLogin["status"], string> = {
 };
 
 // The portal password, hidden behind dots until the eye is clicked, with a button to copy it.
-const PasswordValue = ({ password }: { password?: string }) => {
-  const [shown, setShown] = useState(false);
-  if (!password) return <b className="font-medium! text-[#a3b1ba]!">Not saved — set a new one to see it</b>;
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(password);
-      toast.success("Password copied");
-    } catch {
-      toast.error("Couldn't copy the password.");
-    }
-  };
-  const iconButton = "inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#2563eb]";
-
-  return (
-    <b className="flex min-w-0 items-center gap-1">
-      <span className="min-w-0 break-all font-mono">{shown ? password : "*".repeat(8)}</span>
-      <button type="button" aria-label={shown ? "Hide password" : "Show password"} onClick={() => setShown((value) => !value)} className={iconButton}>
-        {shown ? <EyeOff size={13} strokeWidth={2} /> : <Eye size={13} strokeWidth={2} />}
-      </button>
-      <button type="button" aria-label="Copy password" onClick={copy} className={iconButton}>
-        <Copy size={13} strokeWidth={2} />
-      </button>
-    </b>
-  );
-};
+// The portal password: the eye opens it behind the security code (PasswordEye).
+const PasswordValue = ({ clientId }: { clientId: string }) => (
+  <b className="flex min-w-0 items-center">
+    <PasswordEye label="Portal password" load={() => getClientPortalPasswordAction(clientId)} />
+  </b>
+);
 
 // `comments` are those on the client's onboarding form, when they could be loaded.
 const ClientDetails = ({
@@ -1499,7 +1477,7 @@ const ClientDetails = ({
                   {canManage ? (
                     <div>
                       <span>Password</span>
-                      <PasswordValue password={client.portalPassword} />
+                      {client.hasPortalPassword ? <PasswordValue clientId={client._id} /> : <b className="font-medium! text-[#a3b1ba]!">Not saved — set a new one to see it</b>}
                     </div>
                   ) : null}
                   <div>

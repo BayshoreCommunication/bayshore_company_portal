@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { BACKEND_API_URL } from "@/lib/backend";
+import { servicesPass } from "@/lib/servicesPass";
 import type { OnboardingAnswers } from "./onboarding";
 
 const API = `${BACKEND_API_URL}/clients`;
@@ -122,8 +123,9 @@ export interface Client {
   onboarding?: OnboardingAnswers;
   // Populated objects on read, plain ids if not populated.
   user?: ClientLogin | string;
-  // The portal login's password, for those who manage clients — when it was kept readable.
-  portalPassword?: string;
+  // For those who manage clients: whether the portal login's password can be shown. It is read
+  // only with the security code (getClientPortalPasswordAction).
+  hasPortalPassword?: boolean;
   accountManager?: ClientStaff | string;
   team: (ClientStaff | string)[];
   createdBy?: string;
@@ -243,6 +245,27 @@ export async function listClientsAction(
         },
       },
     };
+  } catch {
+    return { ok: false, error: "Network error. Please try again." };
+  }
+}
+
+// The client's portal password — only with the security code's pass; without it, status 423.
+export async function getClientPortalPasswordAction(id: string): Promise<ClientActionResult<{ password: string }>> {
+  const accessToken = await token();
+  if (!accessToken) return { ok: false, error: "Not authenticated." };
+  const pass = await servicesPass();
+  try {
+    const response = await fetch(`${API}/${id}/portal-password`, {
+      headers: { Authorization: `Bearer ${accessToken}`, ...(pass ? { "X-Services-Unlock": pass } : {}) },
+      cache: "no-store",
+    });
+    if (!response.ok) {
+      const { message } = await parseError(response, "Couldn't show the password.");
+      return { ok: false, error: message, status: response.status };
+    }
+    const { data } = await response.json();
+    return { ok: true, data };
   } catch {
     return { ok: false, error: "Network error. Please try again." };
   }

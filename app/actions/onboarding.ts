@@ -2,6 +2,7 @@
 
 import { auth } from "@/auth";
 import { BACKEND_API_URL } from "@/lib/backend";
+import { servicesPass } from "@/lib/servicesPass";
 
 // The team's side of onboarding (backend: routes/onboarding.route.ts → /onboarding/requests).
 // Someone with no account fills in the onboarding form in the client portal; that makes a
@@ -298,8 +299,10 @@ export async function revealOnboardingPasswordAction(clientId: string, login: st
   const accessToken = await token();
   if (!accessToken) return NOT_SIGNED_IN;
   try {
+    // Only with the security code's pass; without it, status 423.
+    const pass = await servicesPass();
     const response = await fetch(`${BACKEND_API_URL}/onboarding/clients/${clientId}/password?login=${encodeURIComponent(login)}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: { Authorization: `Bearer ${accessToken}`, ...(pass ? { "X-Services-Unlock": pass } : {}) },
       cache: "no-store",
     });
     if (!response.ok) return failure(response, "Couldn't show the password.");

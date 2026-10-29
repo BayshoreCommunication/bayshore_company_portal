@@ -5,6 +5,7 @@ import { Fraunces, Inter } from "next/font/google";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { PasswordEye } from "@/component/shared/PasswordModal";
 import {
   Trash2,
   CheckCircle2,
@@ -35,7 +36,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { createClientAction, updateClientAction, type Client, type ClientProfile, type ClientShared, type ClientStatus, type StaffOption } from "@/app/actions/clients";
+import { createClientAction, getClientPortalPasswordAction, updateClientAction, type Client, type ClientProfile, type ClientShared, type ClientStatus, type StaffOption } from "@/app/actions/clients";
 import { formErrorBanner } from "@/component/shared/ui";
 import {
   BEST_TIMES,
@@ -918,7 +919,6 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
   const [openingOnboarding, setOpeningOnboarding] = useState(false);
   // The staff assigned to the client, by id.
   const [team, setTeam] = useState<string[]>(() => (client?.team ?? []).map((member) => (typeof member === "object" ? member._id : member)));
-  const [showCurrent, setShowCurrent] = useState(false);
 
   // The team to choose from — with the client's present manager among them even when the team
   // couldn't be listed, so that saving doesn't take them off.
@@ -1726,31 +1726,10 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
 
             {/* Their portal login as it is now: the password, hidden until shown, to copy. */}
             {client?.user ? (
-              <Field label="Current portal password" hint={client.portalPassword ? "Type a new one below to replace it." : "It wasn't saved in a way that can be shown. Set a new one below to see it here."}>
-                {client.portalPassword ? (
-                  <div className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] px-3 py-2 font-mono text-[13.5px] break-all text-[#0f172a]">
-                      {showCurrent ? client.portalPassword : "••••••••"}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowCurrent((shown) => !shown)}
-                      className="h-9 shrink-0 cursor-pointer rounded-lg border border-[#e2e8f0] bg-white px-3 text-[12.5px] font-semibold text-[#475569] hover:border-[#93c5fd] hover:text-[#2563eb]"
-                    >
-                      {showCurrent ? "Hide" : "Show"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        navigator.clipboard.writeText(client.portalPassword ?? "").then(
-                          () => toast.success("Password copied"),
-                          () => toast.error("Couldn't copy the password."),
-                        )
-                      }
-                      className="h-9 shrink-0 cursor-pointer rounded-lg border border-[#e2e8f0] bg-white px-3 text-[12.5px] font-semibold text-[#475569] hover:border-[#93c5fd] hover:text-[#2563eb]"
-                    >
-                      Copy
-                    </button>
+              <Field label="Current portal password" hint={client.hasPortalPassword ? "Type a new one below to replace it." : "It wasn't saved in a way that can be shown. Set a new one below to see it here."}>
+                {client.hasPortalPassword ? (
+                  <div className="text-[13.5px] text-[#0f172a]">
+                    <PasswordEye label="Portal password" load={() => getClientPortalPasswordAction(client._id)} />
                   </div>
                 ) : (
                   <p className="text-[13px] text-[#64748b]">Not saved</p>
