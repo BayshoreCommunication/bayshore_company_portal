@@ -20,7 +20,10 @@ export type NotificationType =
   | "content_approved"
   | "content_caption_edited"
   // A comment or reply from a client on their onboarding form.
-  | "onboarding_comment";
+  | "onboarding_comment"
+  // A client made their own account, or said they booked their onboarding call.
+  | "client_signed_up"
+  | "onboarding_call_booked";
 
 // Named NotificationItem because `Notification` is already the browser's own (desktop alerts).
 export interface NotificationItem {
