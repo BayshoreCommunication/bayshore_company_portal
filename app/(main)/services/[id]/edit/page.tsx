@@ -4,6 +4,7 @@ import { getServiceAction } from "@/app/actions/service";
 import ServiceForm from "@/component/services/ServiceForm";
 import { getServicesLockAction } from "@/app/actions/servicesLock";
 import ServicesLock from "@/component/services/ServicesLock";
+import { SERVICES_NEED_CODE } from "@/lib/servicesPass";
 import { canManageServices } from "@/component/services/serviceUi";
 
 const EditServicePage = async ({ params }: { params: Promise<{ id: string }> }) => {
@@ -11,8 +12,10 @@ const EditServicePage = async ({ params }: { params: Promise<{ id: string }> }) 
   const [session, result] = await Promise.all([auth(), getServiceAction(id)]);
 
   if (!canManageServices(session?.user?.role)) redirect("/services");
-  const lock = await getServicesLockAction();
-  if (!lock.unlocked) return <ServicesLock available={lock.available} />;
+  if (SERVICES_NEED_CODE) {
+    const lock = await getServicesLockAction();
+    if (!lock.unlocked) return <ServicesLock available={lock.available} />;
+  }
   if (result.status === 404 || result.status === 422) notFound();
 
   if (!result.ok || !result.data) {
