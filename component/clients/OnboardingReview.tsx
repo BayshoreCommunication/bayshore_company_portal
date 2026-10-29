@@ -606,12 +606,16 @@ const OnboardingReview = ({
   const [saving, setSaving] = useState(0);
 
   const commit = (change: (now: { off: Ticks; approved: Ticks }) => { off?: Ticks; approved?: Ticks }) => {
-    const next = { ...latest.current, ...change(latest.current) };
+    const previous = latest.current;
+    const next = { ...previous, ...change(previous) };
     latest.current = next;
     setOff(next.off);
     setApproved(next.approved);
-    // An item approved needs no more updating (the backend says the same).
-    setUpdateAsked((now) => Object.fromEntries(Object.entries(now).filter(([id]) => !next.approved[id])));
+    // An item approved needs no more updating, and one newly approved answers what was asked on
+    // its step (the backend says the same).
+    const newly = Object.keys(next.approved).filter((id) => next.approved[id] && !previous.approved[id]);
+    const stepsDone = new Set(newly.map((id) => steps.find((entry) => entry.items.some((item) => item.id === id))?.id));
+    setUpdateAsked((now) => Object.fromEntries(Object.entries(now).filter(([id]) => !next.approved[id] && !stepsDone.has(id))));
     setSaving((count) => count + 1);
     queue.current = queue.current
       .then(async () => {
@@ -635,6 +639,8 @@ const OnboardingReview = ({
   const stepStandingOf = (step: Step): Standing => {
     const live = step.items.filter((item) => isOn(step, item));
     if (!live.length) return "none";
+    // Asked to update the step: to do again, approved or not.
+    if (updateAsked[step.id]) return "todo";
     if (live.every((item) => approved[item.id])) return "approved";
     return live.some((item) => standingOf(step, item) === "todo") ? "todo" : "submitted";
   };
@@ -681,7 +687,7 @@ const OnboardingReview = ({
   useRealtime<OnboardingComment & { client?: string }>("onboarding:comment", (comment) => {
     if (comment.client && comment.client !== client._id) return;
     setComments((now) => (now.some((entry) => entry._id === comment._id) ? now.map((entry) => (entry._id === comment._id ? comment : entry)) : [...now, comment]));
-    if (comment.item) reloadAsks();
+    reloadAsks();
   });
   // And reloaded now and then, in case the live connection is down.
   useRefreshing(() => {
@@ -693,7 +699,11 @@ const OnboardingReview = ({
   // does the same — so nothing is saved here).
   const askedUpdate = (comment: OnboardingComment) => {
     addComment(comment);
-    if (!comment.item) return;
+    // On the whole step: the step is to do again, its items' ticks as they are.
+    if (!comment.item) {
+      setUpdateAsked((now) => ({ ...now, [`step:${comment.step}`]: true }));
+      return;
+    }
     const ids = comment.item === "hosting" ? ["hosting", "cms"] : [comment.item];
     const unticked = (ticks: Ticks) => Object.fromEntries(Object.entries(ticks).filter(([id]) => !ids.includes(id)));
     latest.current = { ...latest.current, approved: unticked(latest.current.approved) };
@@ -1008,7 +1018,7 @@ const OnboardingReview = ({
               );
             })}
           </nav>
-          {client.user ? <OnboardingComments clientId={client._id} comments={comments} onPosted={addComment} /> : null}
+          {client.user ? <OnboardingComments clientId={client._id} comments={comments} onPosted={askedUpdate} /> : null}
         </div>
 
         {/* ── The items ── */}
