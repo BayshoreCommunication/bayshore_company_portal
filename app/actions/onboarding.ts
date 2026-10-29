@@ -84,6 +84,8 @@ export interface OnboardingAnswers {
   // steps ("step:google") and items ("social.facebook") — and the items that are approved.
   notNeeded?: string[];
   approved?: string[];
+  // The items the team asked the client to update (a comment on the item), still to be done.
+  updateAsked?: string[];
   // Asked in the steps a client goes through right after signing up (client-portal: ClientSignup).
   business?: {
     description?: string;

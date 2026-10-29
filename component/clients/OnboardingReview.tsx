@@ -58,7 +58,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
-import { updateClientAction, type Client } from "@/app/actions/clients";
+import { getClientAction, updateClientAction, type Client } from "@/app/actions/clients";
 import { listOnboardingCommentsAction, removeClientOnboardingFileAction, revealOnboardingPasswordAction, updateClientOnboardingAction, type OnboardingAnswers, type OnboardingComment, type OnboardingFile } from "@/app/actions/onboarding";
 import { answersFrom, fieldsOf as editFieldsOf, valueOf, type FieldDef } from "./onboardingFields";
 import { formatFileSize } from "@/component/projects/projectUi";
@@ -597,6 +597,9 @@ const OnboardingReview = ({
   // once; one that can't be saved is put back as it was.
   const [off, setOff] = useState<Ticks>(() => ticksOf(client.onboarding?.notNeeded ?? DEFAULT_NOT_NEEDED));
   const [approved, setApproved] = useState<Ticks>(() => ticksOf(client.onboarding?.approved));
+  // What the team asked the client to update (a comment on the item): to do again for the client
+  // until they change it, reply on it or hand the form in again — or it is approved.
+  const [updateAsked, setUpdateAsked] = useState<Ticks>(() => ticksOf(client.onboarding?.updateAsked));
   const latest = useRef({ off, approved });
   const saved = useRef({ off, approved });
   const queue = useRef<Promise<void>>(Promise.resolve());
@@ -607,6 +610,8 @@ const OnboardingReview = ({
     latest.current = next;
     setOff(next.off);
     setApproved(next.approved);
+    // An item approved needs no more updating (the backend says the same).
+    setUpdateAsked((now) => Object.fromEntries(Object.entries(now).filter(([id]) => !next.approved[id])));
     setSaving((count) => count + 1);
     queue.current = queue.current
       .then(async () => {
@@ -624,7 +629,8 @@ const OnboardingReview = ({
   };
 
   const isOn = (step: Step, item: Entry) => step.locked || (!off[step.id] && !off[item.id]);
-  const standingOf = (step: Step, item: Entry): Standing => (!isOn(step, item) ? "none" : approved[item.id] ? "approved" : item.st === "wait" ? "todo" : "submitted");
+  const standingOf = (step: Step, item: Entry): Standing =>
+    !isOn(step, item) ? "none" : approved[item.id] ? "approved" : item.st === "wait" || updateAsked[item.id] ? "todo" : "submitted";
   // A step as the client's form shows it: approved once every item asked is, todo while one is.
   const stepStandingOf = (step: Step): Standing => {
     const live = step.items.filter((item) => isOn(step, item));
@@ -667,13 +673,34 @@ const OnboardingReview = ({
   // The client's comments, by step, with the team's replies.
   const [comments, setComments] = useState(initialComments);
   // A comment or reply from either side, live (backend → onboarding:comment) — this client's only.
+  // Where the asks stand on the record: the client answers them from their own form.
+  const reloadAsks = () =>
+    void getClientAction(client._id).then((result) => {
+      if (result.ok && result.data) setUpdateAsked(ticksOf(result.data.onboarding?.updateAsked));
+    });
   useRealtime<OnboardingComment & { client?: string }>("onboarding:comment", (comment) => {
     if (comment.client && comment.client !== client._id) return;
     setComments((now) => (now.some((entry) => entry._id === comment._id) ? now.map((entry) => (entry._id === comment._id ? comment : entry)) : [...now, comment]));
+    if (comment.item) reloadAsks();
   });
   // And reloaded now and then, in case the live connection is down.
-  useRefreshing(() => void listOnboardingCommentsAction(client._id).then((result) => result.ok && result.data && setComments(result.data)));
+  useRefreshing(() => {
+    void listOnboardingCommentsAction(client._id).then((result) => result.ok && result.data && setComments(result.data));
+    reloadAsks();
+  });
   const addComment = (comment: OnboardingComment) => setComments((now) => (now.some((entry) => entry._id === comment._id) ? now : [...now, comment]));
+  // The team asked the client to update an item: to do again, and no longer approved (the backend
+  // does the same — so nothing is saved here).
+  const askedUpdate = (comment: OnboardingComment) => {
+    addComment(comment);
+    if (!comment.item) return;
+    const ids = comment.item === "hosting" ? ["hosting", "cms"] : [comment.item];
+    const unticked = (ticks: Ticks) => Object.fromEntries(Object.entries(ticks).filter(([id]) => !ids.includes(id)));
+    latest.current = { ...latest.current, approved: unticked(latest.current.approved) };
+    saved.current = { ...saved.current, approved: unticked(saved.current.approved) };
+    setApproved(latest.current.approved);
+    setUpdateAsked((now) => ({ ...now, ...Object.fromEntries(ids.map((id) => [id, true])) }));
+  };
   const commentsOn = (step: Step) => comments.filter((comment) => `step:${comment.step}` === step.id);
 
   const submittedAt = client.onboarding?.submittedAt
@@ -1045,7 +1072,14 @@ const OnboardingReview = ({
                       // What the team asked the client to fix on this item, and the client's answers.
                       const itemComments = comments.filter((comment) => comment.item && entries.some((entry) => entry.id === comment.item));
                       const lastNote = itemComments[itemComments.length - 1];
-                      const noteState = lastNote && standing !== "approved" && standing !== "none" ? (lastNote.side === "team" ? "asked" : "replied") : null;
+                      const noteState =
+                        standing === "approved" || standing === "none" || !lastNote
+                          ? null
+                          : entries.some((entry) => updateAsked[entry.id])
+                            ? "asked"
+                            : lastNote.side === "team"
+                              ? "updated"
+                              : "replied";
                       return (
                         <div
                           key={item.id}
@@ -1075,9 +1109,9 @@ const OnboardingReview = ({
                                     <span className="inline-flex items-center gap-1 rounded-full bg-[#fef3c7] px-1.5 py-px text-[10.5px] font-semibold text-[#92400e]">
                                       <MessageSquare size={10} strokeWidth={2.5} /> Update asked
                                     </span>
-                                  ) : noteState === "replied" ? (
+                                  ) : noteState ? (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-[#e0f2fe] px-1.5 py-px text-[10.5px] font-semibold text-[#075985]">
-                                      <MessageSquare size={10} strokeWidth={2.5} /> Client replied
+                                      <MessageSquare size={10} strokeWidth={2.5} /> {noteState === "replied" ? "Client replied" : "Client updated"}
                                     </span>
                                   ) : null}
                                 </span>
@@ -1149,7 +1183,7 @@ const OnboardingReview = ({
                                 </div>
                               ) : null}
                               {client.user && standing !== "none" ? (
-                                <ItemComments clientId={client._id} step={step.id.replace(/^step:/, "")} item={{ id: item.id, label: title }} comments={itemComments} onPosted={addComment} />
+                                <ItemComments clientId={client._id} step={step.id.replace(/^step:/, "")} item={{ id: item.id, label: title }} comments={itemComments} onPosted={askedUpdate} />
                               ) : null}
                               {canManage && !step.locked ? (
                                 <div className="flex justify-end">
