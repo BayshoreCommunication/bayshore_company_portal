@@ -561,7 +561,10 @@ const answerRow = (item: Item, icon: LucideIcon): Row => ({
 
 // The five parts. `manager` and `team` are the names of the staff on the account.
 const RecordSections = ({ client, editHref, manager, team }: { client: Client; editHref?: string; manager?: string; team: string[] }) => {
-  const { communication, business, services = [], contract, billing, reportDelivery } = client.details ?? {};
+  const { communication, business, services: recorded = [], contract, billing, reportDelivery } = client.details ?? {};
+  // Running now; the finished ones are their history, shown apart and not counted.
+  const services = recorded.filter((plan) => plan.status !== "done");
+  const finished = recorded.filter((plan) => plan.status === "done").sort((a, b) => (b.doneAt ?? "").localeCompare(a.doneAt ?? ""));
   const logoDesign = business?.logoDesign;
   const monthly = services.reduce((sum, plan) => sum + plan.monthly, 0);
   // What both forms ask — the team's and the client's onboarding form — is kept once, and shown once.
@@ -569,10 +572,10 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
   // Paid once: a logo designed for them, and the team's own services priced once.
   const oneTime = (shared.hasLogo === false && logoDesign?.add ? (logoDesign.price ?? 0) : 0) + services.reduce((sum, plan) => sum + (plan.custom ? (plan.oneTime ?? 0) : 0), 0);
   // What the client asked for and doesn't have yet (a service of the same name answers it).
-  const taken = new Set([...services.map((plan) => plan.name.trim().toLowerCase()), ...client.serviceTypes.map((name) => name.trim().toLowerCase())]);
+  const taken = new Set([...recorded.map((plan) => plan.name.trim().toLowerCase()), ...client.serviceTypes.map((name) => name.trim().toLowerCase())]);
   const openRequests = (client.serviceRequests ?? []).filter((request) => request.status === "open" && !taken.has(request.name.trim().toLowerCase()));
   // Services on the client that were never priced on the form.
-  const unpriced = client.serviceTypes.filter((name) => !services.some((plan) => plan.name === name));
+  const unpriced = client.serviceTypes.filter((name) => !recorded.some((plan) => plan.name === name));
   const menus = portalMenusOf(client);
 
   const examples = shared.competitors.map((row) => [row.url, row.note].filter(Boolean).join(" — "));
@@ -861,9 +864,9 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
               </span>
               <span className="tabular-nums whitespace-nowrap">{plan.custom && !plan.monthly && plan.oneTime ? `${money(plan.oneTime)} one-time` : `${money(plan.monthly)}/mo`}</span>
             </div>
-            {plan.custom && (plan.deadline || plan.duration) ? (
+            {plan.addedAt || (plan.custom && (plan.deadline || plan.duration)) ? (
               <div className="mt-1 text-[12px] leading-normal text-[#3f6212]">
-                {[plan.deadline ? `Due ${day(plan.deadline)}` : "", plan.duration ? `Takes ${plan.duration}` : ""].filter(Boolean).join(" · ")}
+                {[plan.addedAt ? `Added ${formatDate(plan.addedAt)}` : "", plan.custom && plan.deadline ? `Due ${day(plan.deadline)}` : "", plan.custom && plan.duration ? `Takes ${plan.duration}` : ""].filter(Boolean).join(" · ")}
               </div>
             ) : null}
             {plan.custom ? (
@@ -894,6 +897,28 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
           </div>
         ) : null}
         {services.length || unpriced.length ? null : <div className="rounded-xl border border-[#fecaca] bg-[#fff7f7] p-3.5 text-[13px] font-medium text-[#b91c1c]">No services yet.</div>}
+        {finished.length ? (
+          <div className="mt-3 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-3.5 text-[12.5px]">
+            <div className="flex items-baseline justify-between gap-3">
+              <b className="text-[13.5px] font-semibold text-[#334155]">Completed · history</b>
+              <span className="text-[11.5px] text-[#64748b]">Not billed or counted</span>
+            </div>
+            <ul className="mt-2 flex list-none flex-col divide-y divide-[#e2e8f0]">
+              {finished.map((plan) => (
+                <li key={plan.name} className="flex items-baseline justify-between gap-3 py-1.5">
+                  <span className="min-w-0 text-[#334155]">
+                    <span className="font-semibold">{plan.name}</span>
+                    <span className="text-[#64748b]">
+                      {plan.addedAt ? ` · Added ${formatDate(plan.addedAt)}` : ""}
+                      {plan.doneAt ? ` · Done ${formatDate(plan.doneAt)}` : ""}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-[#64748b] tabular-nums">{plan.custom && !plan.monthly && plan.oneTime ? `${money(plan.oneTime)} one-time` : `${money(plan.monthly)}/mo`}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         {openRequests.length ? (
           <div className="mt-3 rounded-xl border border-[#fde68a] bg-[#fffbeb] p-3.5 text-[12.5px]">
             <b className="text-[13.5px] font-semibold text-[#92400e]">Requested by the client</b>

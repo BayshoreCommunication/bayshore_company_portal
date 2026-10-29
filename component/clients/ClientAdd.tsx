@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
   Trash2,
+  CheckCircle2,
+  RotateCcw,
   Plus,
   Loader2,
   ArrowRight,
@@ -626,6 +628,8 @@ type CustomService = {
   deadline: string;
   included: { text: string; on: boolean }[];
   draft: string;
+  // The work is finished: kept on the client as history, not billed (backend: status "done").
+  done?: boolean;
 };
 
 // A choice that isn't on the list was typed in under "Other".
@@ -834,11 +838,14 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
         deadline: plan.deadline ?? "",
         included: (plan.included ?? []).map((text) => ({ text, on: true })),
         draft: "",
+        done: plan.status === "done",
       })),
       ...unpriced.map((name) => ({ key: name, name, price: "", billing: "monthly" as Billing, deadline: "", included: [], draft: "" })),
     ];
   });
-  const otherServices = customs.map((custom) => custom.name.trim()).filter(Boolean);
+  // Running ones only: a finished one is history.
+  const otherServices = customs.filter((custom) => !custom.done).map((custom) => custom.name.trim()).filter(Boolean);
+  const changeCustom = (index: number, patch: Partial<CustomService>) => setCustoms((now) => now.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)));
   // The client's requests the team answers here, by id: added as a custom service, or set aside.
   // Saved with the form.
   const [answeredRequests, setAnsweredRequests] = useState<Record<string, "added" | "dismissed">>({});
@@ -927,7 +934,7 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
   const present = client?.accountManager && typeof client.accountManager === "object" ? client.accountManager : undefined;
   const managers: [string, string][] = [...staff, ...(present && !staff.some((member) => member._id === present._id) ? [present] : [])].map((member) => [member._id, member.fullName]);
 
-  const customTotal = (billing: Billing) => customs.reduce((sum, custom) => (custom.name.trim() && custom.billing === billing ? sum + (parseFloat(custom.price) || 0) : sum), 0);
+  const customTotal = (billing: Billing) => customs.reduce((sum, custom) => (custom.name.trim() && !custom.done && custom.billing === billing ? sum + (parseFloat(custom.price) || 0) : sum), 0);
   const monthly = services.reduce((sum, state, index) => (state.on ? sum + amountOf(state, index) : sum), 0) + customTotal("monthly");
   const oneTime = (logo === "no" && logoAdd ? parseFloat(answers.logoPrice) || 0 : 0) + customTotal("one_time");
   const hasWebsite = has.includes("website");
@@ -989,6 +996,7 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
             included: [...custom.included.filter((item) => item.on).map((item) => item.text), ...(custom.draft.trim() ? [custom.draft.trim()] : [])],
             addons: [],
             custom: true,
+            ...(custom.done ? { status: "done" as const } : {}),
           })),
       ),
       transfer: {
@@ -1471,26 +1479,70 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
                     </button>
                   </div>
                 ) : null}
-                {customs.map((custom, index) => (
-                  <CustomServiceEditor
-                    key={custom.key}
-                    custom={custom}
-                    idPrefix={`${id}-custom-${index}`}
-                    change={(patch) => setCustoms((now) => now.map((entry, at) => (at === index ? { ...entry, ...patch } : entry)))}
-                    onRemove={() => {
-                      setCustoms((now) => now.filter((_, at) => at !== index));
-                      // Taken off again before saving: the client's request it came from is open again.
-                      if (custom.key.startsWith("request-")) {
-                        setAnsweredRequests((now) => {
-                          const next = { ...now };
-                          delete next[custom.key.slice("request-".length)];
-                          return next;
-                        });
+                {customs.map((custom, index) =>
+                  custom.done ? null : (
+                    <CustomServiceEditor
+                      key={custom.key}
+                      custom={custom}
+                      idPrefix={`${id}-custom-${index}`}
+                      change={(patch) => changeCustom(index, patch)}
+                      onRemove={() => {
+                        setCustoms((now) => now.filter((_, at) => at !== index));
+                        // Taken off again before saving: the client's request it came from is open again.
+                        if (custom.key.startsWith("request-")) {
+                          setAnsweredRequests((now) => {
+                            const next = { ...now };
+                            delete next[custom.key.slice("request-".length)];
+                            return next;
+                          });
+                        }
+                      }}
+                      footer={
+                        custom.name.trim() ? (
+                          <div className="mt-3 flex items-center justify-between gap-2 border-t border-[#f1f5f9] pt-2.5">
+                            <span className="text-[11.5px] text-[#94a3b8]">Work finished? It moves to the client&apos;s history.</span>
+                            <button
+                              type="button"
+                              onClick={() => changeCustom(index, { done: true })}
+                              className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-lg border border-[#bbf7d0] bg-[#f0fdf4] px-3 text-[12.5px] font-semibold text-[#15803d] hover:bg-[#dcfce7]"
+                            >
+                              <CheckCircle2 size={14} strokeWidth={2.25} /> Mark as done
+                            </button>
+                          </div>
+                        ) : undefined
                       }
-                    }}
-                  />
-                ))}
-                {!customs.length && !(logo === "no" && logoAdd) ? <p className="text-[12.5px] text-[#94a3b8]">No custom services yet.</p> : null}
+                    />
+                  )
+                )}
+                {customs.some((custom) => custom.done) ? (
+                  <div className="rounded-lg border border-[#e2e8f0] bg-white p-2.5">
+                    <div className="mb-1.5 flex items-baseline justify-between gap-2 px-1">
+                      <span className="text-[12.5px] font-semibold text-[#334155]">Completed · history</span>
+                      <span className="text-[11.5px] text-[#94a3b8]">Not billed. The client still sees them.</span>
+                    </div>
+                    <ul className="flex list-none flex-col divide-y divide-[#f1f5f9]">
+                      {customs.map((custom, index) =>
+                        custom.done ? (
+                          <li key={custom.key} className="flex items-center gap-2.5 px-1 py-1.5">
+                            <CheckCircle2 size={15} strokeWidth={2.25} className="shrink-0 text-[#16a34a]" />
+                            <span className="min-w-0 flex-1 truncate text-[13px] text-[#334155]">
+                              <span className="font-semibold">{custom.name}</span>
+                              <span className="text-[#94a3b8]"> · {money(parseFloat(custom.price) || 0)}{custom.billing === "monthly" ? "/mo" : " one-time"}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => changeCustom(index, { done: false })}
+                              className="inline-flex h-7 cursor-pointer items-center gap-1 rounded-md px-2 text-[12px] font-semibold text-[#2563eb] hover:bg-[#eff6ff]"
+                            >
+                              <RotateCcw size={12} strokeWidth={2.25} /> Reopen
+                            </button>
+                          </li>
+                        ) : null
+                      )}
+                    </ul>
+                  </div>
+                ) : null}
+                {!customs.some((custom) => !custom.done) && !(logo === "no" && logoAdd) ? <p className="text-[12.5px] text-[#94a3b8]">No custom services yet.</p> : null}
               </div>
             </div>
 

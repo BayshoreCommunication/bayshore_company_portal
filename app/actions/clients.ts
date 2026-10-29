@@ -45,6 +45,11 @@ export interface ClientServicePlan {
   // For one paid once: when it is due (yyyy-mm-dd), and/or how long it takes.
   deadline?: string;
   duration?: string;
+  // "done" once the work is finished: kept as history, no longer billed. Missing is running.
+  status?: "active" | "done";
+  // When it was put on the client and when it was finished (set by the backend).
+  addedAt?: string;
+  doneAt?: string;
 }
 
 export type ClientSocial = "facebook" | "instagram" | "linkedin" | "tiktok" | "youtube" | "x";
