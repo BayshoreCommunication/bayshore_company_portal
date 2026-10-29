@@ -30,7 +30,7 @@ const whenOf = (iso: string) =>
 const isImage = (file: OnboardingCommentFile) => (file.mimeType ?? "").startsWith("image/") || /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(file.name);
 
 // What a comment came with: each picture as a thumbnail that opens it, anything else a link.
-const Files = ({ files }: { files: OnboardingCommentFile[] }) =>
+export const Files = ({ files }: { files: OnboardingCommentFile[] }) =>
   files.length ? (
     <div className="mt-1.5 flex flex-wrap gap-1.5">
       {files.some(isImage) ? (
@@ -216,6 +216,7 @@ const OnboardingThread = ({ clientId, comments, onChange }: { clientId: string; 
                   )}
                   <span className="text-[11.5px] text-[#9ca3af]">{whenOf(comment.createdAt)}</span>
                 </div>
+                {comment.itemLabel ? <div className="mt-0.5 text-[11.5px] font-medium text-[#6b7280]">About {comment.itemLabel}</div> : null}
                 {comment.text ? (
                   <p className="mt-1 rounded-[10px] rounded-tl-sm border border-[#e3e8e5] bg-white px-3 py-2 text-[13px] leading-normal break-words whitespace-pre-wrap text-[#111827]">{comment.text}</p>
                 ) : null}

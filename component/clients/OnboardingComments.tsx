@@ -171,7 +171,10 @@ const OnboardingComments = ({
                     </span>
                     <span className="text-[11px] text-[#9ca3af]">{whenOf(comment.createdAt)}</span>
                   </div>
-                  <div className="mt-0.5 text-[10.5px] font-medium text-[#6b7280]">On {titleOf(comment.step)}</div>
+                  <div className="mt-0.5 text-[10.5px] font-medium text-[#6b7280]">
+                    On {titleOf(comment.step)}
+                    {comment.itemLabel ? ` · ${comment.itemLabel}` : ""}
+                  </div>
                   {comment.text ? (
                     <p className={`mt-1 rounded-lg rounded-tl-sm px-3 py-2 text-[12.5px] leading-normal break-words whitespace-pre-wrap text-[#1f2530] ${team ? "bg-[#eef3fd]" : "bg-[#f5f6f8]"}`}>
                       {comment.text}

@@ -63,6 +63,7 @@ import { listOnboardingCommentsAction, removeClientOnboardingFileAction, revealO
 import { answersFrom, fieldsOf as editFieldsOf, valueOf, type FieldDef } from "./onboardingFields";
 import { formatFileSize } from "@/component/projects/projectUi";
 import OnboardingComments from "./OnboardingComments";
+import ItemComments from "./ItemComments";
 import StepTicks from "./StepTicks";
 import { useRealtime, useRefreshing } from "@/lib/realtime";
 import { NONE } from "./clientUi";
@@ -672,6 +673,7 @@ const OnboardingReview = ({
   });
   // And reloaded now and then, in case the live connection is down.
   useRefreshing(() => void listOnboardingCommentsAction(client._id).then((result) => result.ok && result.data && setComments(result.data)));
+  const addComment = (comment: OnboardingComment) => setComments((now) => (now.some((entry) => entry._id === comment._id) ? now : [...now, comment]));
   const commentsOn = (step: Step) => comments.filter((comment) => `step:${comment.step}` === step.id);
 
   const submittedAt = client.onboarding?.submittedAt
@@ -979,7 +981,7 @@ const OnboardingReview = ({
               );
             })}
           </nav>
-          {client.user ? <OnboardingComments clientId={client._id} comments={comments} onPosted={(comment) => setComments((now) => (now.some((entry) => entry._id === comment._id) ? now : [...now, comment]))} /> : null}
+          {client.user ? <OnboardingComments clientId={client._id} comments={comments} onPosted={addComment} /> : null}
         </div>
 
         {/* ── The items ── */}
@@ -1040,6 +1042,10 @@ const OnboardingReview = ({
                       const ItemIcon = ITEM_ICONS[item.id] ?? LayoutList;
                       const StateIcon = STATE_ICONS[standing];
                       const unanswered = item.kind === "empty";
+                      // What the team asked the client to fix on this item, and the client's answers.
+                      const itemComments = comments.filter((comment) => comment.item && entries.some((entry) => entry.id === comment.item));
+                      const lastNote = itemComments[itemComments.length - 1];
+                      const noteState = lastNote && standing !== "approved" && standing !== "none" ? (lastNote.side === "team" ? "asked" : "replied") : null;
                       return (
                         <div
                           key={item.id}
@@ -1063,6 +1069,15 @@ const OnboardingReview = ({
                                   {standing === "submitted" && item.st === "help" ? (
                                     <span className="inline-flex items-center gap-1 rounded-full bg-[#ede9fe] px-1.5 py-px text-[10.5px] font-semibold text-[#6d28d9]">
                                       <LifeBuoy size={10} strokeWidth={2.5} /> Asked for our help
+                                    </span>
+                                  ) : null}
+                                  {noteState === "asked" ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-[#fef3c7] px-1.5 py-px text-[10.5px] font-semibold text-[#92400e]">
+                                      <MessageSquare size={10} strokeWidth={2.5} /> Update asked
+                                    </span>
+                                  ) : noteState === "replied" ? (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-[#e0f2fe] px-1.5 py-px text-[10.5px] font-semibold text-[#075985]">
+                                      <MessageSquare size={10} strokeWidth={2.5} /> Client replied
                                     </span>
                                   ) : null}
                                 </span>
@@ -1132,6 +1147,9 @@ const OnboardingReview = ({
                                     Mark as complete
                                   </button>
                                 </div>
+                              ) : null}
+                              {client.user && standing !== "none" ? (
+                                <ItemComments clientId={client._id} step={step.id.replace(/^step:/, "")} item={{ id: item.id, label: title }} comments={itemComments} onPosted={addComment} />
                               ) : null}
                               {canManage && !step.locked ? (
                                 <div className="flex justify-end">
