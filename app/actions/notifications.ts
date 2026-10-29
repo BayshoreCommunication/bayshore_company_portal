@@ -23,7 +23,9 @@ export type NotificationType =
   | "onboarding_comment"
   // A client made their own account, or said they booked their onboarding call.
   | "client_signed_up"
-  | "onboarding_call_booked";
+  | "onboarding_call_booked"
+  // A client asked for a service from their Services page.
+  | "service_requested";
 
 // Named NotificationItem because `Notification` is already the browser's own (desktop alerts).
 export interface NotificationItem {

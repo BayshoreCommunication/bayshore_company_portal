@@ -259,22 +259,12 @@ const CustomServiceEditor = ({
     <div className={`rounded-lg border bg-white p-2.5 ${tone}`}>
     {/* On one line: its name, price, how often it is paid, the deadline for one paid once, and remove. */}
     <div
-      className={`grid items-center gap-2.5 max-[640px]:grid-cols-1 ${
-        custom.billing === "one_time"
-          ? onRemove
-            ? "grid-cols-[minmax(0,1fr)_130px_120px_160px_36px]"
-            : "grid-cols-[minmax(0,1fr)_130px_120px_160px]"
-          : onRemove
-            ? "grid-cols-[minmax(0,1fr)_140px_130px_36px]"
-            : "grid-cols-[minmax(0,1fr)_140px_130px]"
-      }`}
+      className={`grid items-center gap-2.5 max-[640px]:grid-cols-1 ${onRemove ? "grid-cols-[minmax(0,1fr)_130px_100px_160px_36px]" : "grid-cols-[minmax(0,1fr)_130px_100px_160px]"}`}
     >
       <input className={inputClass} placeholder="Service name, e.g. Landing page" aria-label="Service name" value={custom.name} maxLength={150} onChange={(event) => change({ name: event.target.value })} />
       <NumberInput id={`${idPrefix}-price`} value={custom.price} onChange={(value) => change({ price: value })} dollars />
-      <select className={`${inputClass} cursor-pointer`} aria-label="How often it is paid" value={custom.billing} onChange={(event) => change({ billing: event.target.value as Billing })}>
-        <option value="monthly">Monthly</option>
-        <option value="one_time">One-time</option>
-      </select>
+      {/* A custom service is always paid once. */}
+      <span className="rounded-full bg-[#fff7ed] px-2.5 py-1 text-center text-[12px] font-semibold text-[#c2410c]">One-time</span>
       {custom.billing === "one_time" ? (
         // Named inside the box, so the line stays one line.
         <label className={`${fieldLook} flex cursor-pointer flex-col justify-center px-3 py-1 focus-within:border-[#2563eb] focus-within:bg-white focus-within:ring-3 focus-within:ring-[#2563eb]/12`}>
@@ -834,13 +824,14 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
         key: plan.name,
         name: plan.name,
         price: String(plan.oneTime || plan.monthly || ""),
-        billing: (plan.oneTime && !plan.monthly ? "one_time" : "monthly") as Billing,
+        // Always paid once — one saved as monthly before becomes one-time.
+        billing: "one_time" as Billing,
         deadline: plan.deadline ?? "",
         included: (plan.included ?? []).map((text) => ({ text, on: true })),
         draft: "",
         done: plan.status === "done",
       })),
-      ...unpriced.map((name) => ({ key: name, name, price: "", billing: "monthly" as Billing, deadline: "", included: [], draft: "" })),
+      ...unpriced.map((name) => ({ key: name, name, price: "", billing: "one_time" as Billing, deadline: "", included: [], draft: "" })),
     ];
   });
   // Running ones only: a finished one is history.
@@ -1453,7 +1444,7 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="text-[14px] font-bold text-[#0f172a]">Custom services</div>
-                  <div className="text-[12.5px] text-[#64748b]">Anything not on the list above, with its own price.</div>
+                  <div className="text-[12.5px] text-[#64748b]">Anything not on the list above, paid once.</div>
                 </div>
                 <button
                   type="button"
@@ -1527,7 +1518,7 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
                             <CheckCircle2 size={15} strokeWidth={2.25} className="shrink-0 text-[#16a34a]" />
                             <span className="min-w-0 flex-1 truncate text-[13px] text-[#334155]">
                               <span className="font-semibold">{custom.name}</span>
-                              <span className="text-[#94a3b8]"> · {money(parseFloat(custom.price) || 0)}{custom.billing === "monthly" ? "/mo" : " one-time"}</span>
+                              <span className="text-[#94a3b8]"> · {money(parseFloat(custom.price) || 0)} one-time</span>
                             </span>
                             <button
                               type="button"

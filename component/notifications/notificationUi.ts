@@ -1,4 +1,4 @@
-import { Bell, CalendarCheck, CheckCircle2, MessageSquareText, PencilLine, RotateCcw, SendHorizontal, UserPlus, type LucideIcon } from "lucide-react";
+import { Bell, CalendarCheck, CirclePlus, CheckCircle2, MessageSquareText, PencilLine, RotateCcw, SendHorizontal, UserPlus, type LucideIcon } from "lucide-react";
 import type { NotificationType } from "@/app/actions/notifications";
 
 // What each kind of notification looks like — shared by the bell in the top bar and the
@@ -14,6 +14,7 @@ const KINDS: Record<NotificationType, Kind> = {
   onboarding_comment: { label: "Onboarding comment", icon: MessageSquareText, color: "#2f5fd8", background: "#e8effd" },
   client_signed_up: { label: "New client", icon: UserPlus, color: "#16a34a", background: "#dcf3e2" },
   onboarding_call_booked: { label: "Call booked", icon: CalendarCheck, color: "#16a34a", background: "#dcf3e2" },
+  service_requested: { label: "Service request", icon: CirclePlus, color: "#d97706", background: "#fdf1de" },
   content_sent: { label: "Sent for approval", icon: SendHorizontal, color: "#d97706", background: "#fdf1de" },
   content_resubmitted: { label: "Re-submitted", icon: RotateCcw, color: "#d97706", background: "#fdf1de" },
 };
@@ -28,6 +29,7 @@ export const STAFF_NOTIFICATIONS: { type: NotificationType; description: string 
   { type: "content_caption_edited", description: "A client rewrote a piece's caption or tags." },
   { type: "client_signed_up", description: "A new client created their own account." },
   { type: "onboarding_call_booked", description: "A client booked their onboarding call." },
+  { type: "service_requested", description: "A client asked for a service from their portal." },
 ];
 
 // The backend keeps a notification this long (models/notification.model.ts), then deletes it.

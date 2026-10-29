@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useRealtime } from "@/lib/realtime";
 import toast from "react-hot-toast";
 import {
   AlertTriangle,
@@ -566,11 +567,13 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
   const services = recorded.filter((plan) => plan.status !== "done");
   const finished = recorded.filter((plan) => plan.status === "done").sort((a, b) => (b.doneAt ?? "").localeCompare(a.doneAt ?? ""));
   const logoDesign = business?.logoDesign;
-  const monthly = services.reduce((sum, plan) => sum + plan.monthly, 0);
+  // A custom service is paid once (one saved as monthly before counts as once too).
+  const onceOf = (plan: { custom?: boolean; oneTime?: number; monthly: number }) => (plan.custom ? plan.oneTime || plan.monthly : 0);
+  const monthly = services.reduce((sum, plan) => sum + (plan.custom ? 0 : plan.monthly), 0);
   // What both forms ask — the team's and the client's onboarding form — is kept once, and shown once.
   const shared = sharedOf(client);
   // Paid once: a logo designed for them, and the team's own services priced once.
-  const oneTime = (shared.hasLogo === false && logoDesign?.add ? (logoDesign.price ?? 0) : 0) + services.reduce((sum, plan) => sum + (plan.custom ? (plan.oneTime ?? 0) : 0), 0);
+  const oneTime = (shared.hasLogo === false && logoDesign?.add ? (logoDesign.price ?? 0) : 0) + services.reduce((sum, plan) => sum + onceOf(plan), 0);
   // What the client asked for and doesn't have yet (a service of the same name answers it).
   const taken = new Set([...recorded.map((plan) => plan.name.trim().toLowerCase()), ...client.serviceTypes.map((name) => name.trim().toLowerCase())]);
   const openRequests = (client.serviceRequests ?? []).filter((request) => request.status === "open" && !taken.has(request.name.trim().toLowerCase()));
@@ -862,7 +865,7 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
                 {plan.name}
                 {plan.custom ? <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[10.5px] font-bold text-[#15803d]">Custom</span> : null}
               </span>
-              <span className="tabular-nums whitespace-nowrap">{plan.custom && !plan.monthly && plan.oneTime ? `${money(plan.oneTime)} one-time` : `${money(plan.monthly)}/mo`}</span>
+              <span className="tabular-nums whitespace-nowrap">{plan.custom ? `${money(onceOf(plan))} one-time` : `${money(plan.monthly)}/mo`}</span>
             </div>
             {plan.addedAt || (plan.custom && (plan.deadline || plan.duration)) ? (
               <div className="mt-1 text-[12px] leading-normal text-[#3f6212]">
@@ -913,7 +916,7 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
                       {plan.doneAt ? ` · Done ${formatDate(plan.doneAt)}` : ""}
                     </span>
                   </span>
-                  <span className="shrink-0 text-[#64748b] tabular-nums">{plan.custom && !plan.monthly && plan.oneTime ? `${money(plan.oneTime)} one-time` : `${money(plan.monthly)}/mo`}</span>
+                  <span className="shrink-0 text-[#64748b] tabular-nums">{plan.custom ? `${money(onceOf(plan))} one-time` : `${money(plan.monthly)}/mo`}</span>
                 </li>
               ))}
             </ul>
@@ -1376,6 +1379,11 @@ const ClientDetails = ({
   comments?: OnboardingComment[];
 }) => {
   const [activeTab, setActiveTab] = useState(TABS[0]);
+  // The client asked for a service while this page is open: it shows under their services at once.
+  const router = useRouter();
+  useRealtime<{ type?: string; client?: string }>("notifications:new", (news) => {
+    if (news?.type === "service_requested" && news.client === client._id) router.refresh();
+  });
 
   const login = client.user && typeof client.user === "object" ? client.user : undefined;
   const manager = staffName(client.accountManager);
