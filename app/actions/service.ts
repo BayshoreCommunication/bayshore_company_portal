@@ -3,6 +3,7 @@
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { BACKEND_API_URL } from "@/lib/backend";
+import { servicesPass } from "@/lib/servicesPass";
 
 const API = `${BACKEND_API_URL}/services`;
 
@@ -133,10 +134,16 @@ async function failure(response: Response, fallback: string) {
 const NOT_SIGNED_IN = { ok: false as const, error: "Not authenticated." };
 const NETWORK_ERROR = { ok: false as const, error: "Network error. Please try again." };
 
-const authorised = (accessToken: string, json = false): HeadersInit => ({
-  Authorization: `Bearer ${accessToken}`,
-  ...(json ? { "Content-Type": "application/json" } : {}),
-});
+// With the pass from the services security code (servicesLock.ts) — without it the backend
+// answers 423 and the page asks for the code.
+const authorised = async (accessToken: string, json = false): Promise<HeadersInit> => {
+  const pass = await servicesPass();
+  return {
+    Authorization: `Bearer ${accessToken}`,
+    ...(json ? { "Content-Type": "application/json" } : {}),
+    ...(pass ? { "X-Services-Unlock": pass } : {}),
+  };
+};
 
 // ── The catalog ──────────────────────────────────────────────────────────────
 
@@ -145,7 +152,7 @@ export async function listServicesAction(): Promise<ServiceActionResult<ServiceL
   if (!accessToken) return NOT_SIGNED_IN;
 
   try {
-    const response = await fetch(API, { headers: authorised(accessToken), cache: "no-store" });
+    const response = await fetch(API, { headers: await authorised(accessToken), cache: "no-store" });
     if (!response.ok) return failure(response, "Failed to fetch services.");
 
     const { data } = await response.json();
@@ -160,7 +167,7 @@ export async function getServiceAction(id: string): Promise<ServiceActionResult<
   if (!accessToken) return NOT_SIGNED_IN;
 
   try {
-    const response = await fetch(`${API}/${id}`, { headers: authorised(accessToken), cache: "no-store" });
+    const response = await fetch(`${API}/${id}`, { headers: await authorised(accessToken), cache: "no-store" });
     if (!response.ok) return failure(response, "Failed to fetch service.");
 
     const { data } = await response.json();
@@ -178,7 +185,7 @@ export async function createServiceAction(input: ServiceInput): Promise<ServiceA
   try {
     const response = await fetch(API, {
       method: "POST",
-      headers: authorised(accessToken, true),
+      headers: await authorised(accessToken, true),
       body: JSON.stringify(input),
     });
     if (!response.ok) return failure(response, "Failed to create service.");
@@ -203,7 +210,7 @@ export async function updateServiceAction(
   try {
     const response = await fetch(`${API}/${id}`, {
       method: "PATCH",
-      headers: authorised(accessToken, true),
+      headers: await authorised(accessToken, true),
       body: JSON.stringify(input),
     });
     if (!response.ok) return failure(response, "Failed to update service.");
@@ -223,7 +230,7 @@ export async function deleteServiceAction(id: string): Promise<ServiceActionResu
   if (!accessToken) return NOT_SIGNED_IN;
 
   try {
-    const response = await fetch(`${API}/${id}`, { method: "DELETE", headers: authorised(accessToken) });
+    const response = await fetch(`${API}/${id}`, { method: "DELETE", headers: await authorised(accessToken) });
     if (!response.ok) return failure(response, "Failed to delete service.");
 
     revalidatePath(LIST_PATH);
@@ -240,7 +247,7 @@ export async function getClientServicesAction(clientId: string): Promise<Service
   if (!accessToken) return NOT_SIGNED_IN;
 
   try {
-    const response = await fetch(`${API}/clients/${clientId}`, { headers: authorised(accessToken), cache: "no-store" });
+    const response = await fetch(`${API}/clients/${clientId}`, { headers: await authorised(accessToken), cache: "no-store" });
     if (!response.ok) return failure(response, "Failed to fetch the client's services.");
 
     const { data } = await response.json();
@@ -262,7 +269,7 @@ export async function setClientServicesAction(
   try {
     const response = await fetch(`${API}/clients/${clientId}`, {
       method: "PUT",
-      headers: authorised(accessToken, true),
+      headers: await authorised(accessToken, true),
       body: JSON.stringify({ services }),
     });
     if (!response.ok) return failure(response, "Failed to save the client's services.");

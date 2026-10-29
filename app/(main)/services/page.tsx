@@ -2,6 +2,8 @@ import { auth } from "@/auth";
 import { listClientsAction } from "@/app/actions/clients";
 import { getClientServicesAction, listServicesAction } from "@/app/actions/service";
 import ServicesList from "@/component/services/ServicesList";
+import { getServicesLockAction } from "@/app/actions/servicesLock";
+import ServicesLock from "@/component/services/ServicesLock";
 import { canAssignServices, canManageServices } from "@/component/services/serviceUi";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -14,6 +16,10 @@ const CLIENT_OPTIONS_LIMIT = 100;
 // ?client=<id> shows that client's services and monthly payment; without it, the catalog.
 // The catalog is loaded either way: the client's view needs it to offer more services.
 const ServicesPage = async ({ searchParams }: { searchParams: SearchParams }) => {
+  // Behind the security code: nothing is loaded until it is entered.
+  const lock = await getServicesLockAction();
+  if (!lock.unlocked) return <ServicesLock available={lock.available} />;
+
   const params = await searchParams;
   const clientId = first(params.client) ?? "all";
 
