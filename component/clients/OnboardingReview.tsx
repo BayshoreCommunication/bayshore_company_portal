@@ -31,6 +31,7 @@ import {
   CircleCheck,
   Clapperboard,
   Clock,
+  Eye,
   EyeOff,
   Globe,
   Hourglass,
@@ -1160,9 +1161,26 @@ const OnboardingReview = ({
                                 <ItemComments clientId={client._id} step={step.id.replace(/^step:/, "")} item={{ id: item.id, label: title }} comments={itemComments} onPosted={askedUpdate} />
                               ) : null}
                               {canManage && !step.locked ? (
-                                <div className="flex justify-end">
+                                // Whether the client is asked for this on their form: the team shows or hides it.
+                                <div
+                                  className={`flex flex-wrap items-center justify-between gap-3 rounded-[10px] border px-3 py-2.5 ${
+                                    standing === "none" ? "border-[#e5e7eb] bg-[#f9fafb]" : "border-[#dbeafe] bg-[#f5f8ff]"
+                                  }`}
+                                >
+                                  <span className="flex min-w-0 items-center gap-2.5">
+                                    <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${standing === "none" ? "bg-[#f3f4f6] text-[#6b7280]" : "bg-[#e8eefe] text-[#2F5FD8]"}`}>
+                                      {standing === "none" ? <EyeOff size={15} strokeWidth={2} /> : <Eye size={15} strokeWidth={2} />}
+                                    </span>
+                                    <span className="min-w-0">
+                                      <span className="block text-[13px] font-semibold text-[#111827]">{standing === "none" ? "Hidden from the client" : "Shown to the client"}</span>
+                                      <span className="block text-[12px] text-[#6b7280]">
+                                        {standing === "none" ? "Not on their onboarding form. Show it to ask them for it." : "They're asked for this on their onboarding form."}
+                                      </span>
+                                    </span>
+                                  </span>
                                   <button type="button" className={smallButton} onClick={() => entries.forEach((entry) => (standing === "none" ? addBack(step, entry) : skip(entry)))}>
-                                    {standing === "none" ? "Ask client for this" : "Mark not needed"}
+                                    {standing === "none" ? <Eye size={14} strokeWidth={2} className="mr-1.5" /> : <EyeOff size={14} strokeWidth={2} className="mr-1.5" />}
+                                    {standing === "none" ? "Show to client" : "Hide from client"}
                                   </button>
                                 </div>
                               ) : null}
