@@ -769,7 +769,21 @@ const number = (value: string) => parseFloat(value) || 0;
 // Pass `client` to edit an existing one; leave it out to add a new one. `staff` are the team
 // members an account manager can be picked from. `backHref` is where Cancel goes, when not the
 // client's own page (or the list, for a new one).
-export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onlyAsked }: { client?: Client; staff?: StaffOption[]; backHref?: string; only?: number }) => {
+// `embedded`: the one part (`only`) inside another page (Services → Edit), without the form's
+// own header and side cards; saving or cancelling calls `onDone` and stays on that page.
+export const ClientForm = ({
+  client,
+  staff = [],
+  backHref: cancelHref,
+  only: onlyAsked,
+  embedded,
+}: {
+  client?: Client;
+  staff?: StaffOption[];
+  backHref?: string;
+  only?: number;
+  embedded?: { onDone: () => void };
+}) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const id = useId();
@@ -784,6 +798,8 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
     if (only) document.getElementById(`section-${only}`)?.scrollIntoView({ block: "start" });
   }, [only]);
   const backHref = cancelHref ?? (client ? `/clients/${client._id}` : "/clients");
+  // Embedded, only the part asked for is on the page.
+  const shows = (step: number) => !embedded || step === only;
   const saved = client?.details;
 
   // ── Step 1: who they are ──
@@ -912,8 +928,10 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<string[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
-  const toOnboarding = useRef(false);
-  const [openingOnboarding, setOpeningOnboarding] = useState(false);
+  // The page a part with a page of its own opens, once the form is saved: the onboarding page,
+  // or the client's services (both in their edit mode).
+  const nextPage = useRef<"onboarding" | "services" | null>(null);
+  const [opening, setOpening] = useState<"onboarding" | "services" | null>(null);
   // The staff assigned to the client, by id.
   const [team, setTeam] = useState<string[]>(() => (client?.team ?? []).map((member) => (typeof member === "object" ? member._id : member)));
 
@@ -934,14 +952,14 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
     event.preventDefault();
     setError(null);
     setFieldErrors([]);
-    // Whether this save was asked for on the way to the onboarding page (the part that opens it).
-    const thenOnboarding = toOnboarding.current;
-    toOnboarding.current = false;
+    // Whether this save was asked for on the way to a part's own page (the part that opens it).
+    const then = nextPage.current;
+    nextPage.current = null;
 
     const refuse = (message: string) => {
       setError(message);
       toast.error(message);
-      setOpeningOnboarding(false);
+      setOpening(null);
     };
     const serviceTypes = [...SERVICES.filter((_, index) => services[index].on).map((service) => service.name), ...otherServices];
     if (methods.length === 0) return refuse("Select at least one way to communicate with the client.");
@@ -1054,20 +1072,26 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
         setError(result.error ?? "Something went wrong.");
         setFieldErrors(result.fieldErrors ?? []);
         toast.error(result.error ?? "Something went wrong.");
-        setOpeningOnboarding(false);
+        setOpening(null);
         return;
       }
 
       const savedId = client?._id ?? (result.data && "client" in result.data ? result.data.client._id : undefined);
-      // On the way to the onboarding page, the save is quiet: the page itself is the next step.
-      if (thenOnboarding && savedId) return router.push(`/clients/${savedId}/onboarding?edit=1`);
+      // On the way to a part's own page, the save is quiet: the page itself is the next step.
+      if (then && savedId) return router.push(then === "onboarding" ? `/clients/${savedId}/onboarding?edit=1` : `/services?client=${savedId}&edit=1&from=client`);
       toast.success(client ? "Client updated successfully" : "Client created successfully");
+      if (embedded) {
+        embedded.onDone();
+        router.refresh();
+        return;
+      }
       router.push(client ? `/clients/${client._id}` : "/clients");
     });
   };
 
   return (
     <div className={`${inter.className} w-full text-[15px] leading-[1.5] text-[#111827]`}>
+      {embedded ? null : (
       <div className="mb-7 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#e2e8f0] bg-gradient-to-r from-white to-[#f8fbff] px-5 py-4 shadow-[0_4px_16px_rgba(15,23,42,0.035)] sm:px-6">
         <div className="flex min-w-0 items-center gap-3.5">
           <span
@@ -1096,13 +1120,15 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
           <ArrowLeft size={15} strokeWidth={2} /> Back
         </Link>
       </div>
+      )}
 
-      <div className="grid grid-cols-[minmax(0,1fr)_340px] items-start gap-7 max-[960px]:grid-cols-1">
+      <div className={embedded ? "" : "grid grid-cols-[minmax(0,1fr)_340px] items-start gap-7 max-[960px]:grid-cols-1"}>
         {/* With parts closed, a field left empty in one of them couldn't show the browser's own
             "fill this in" bubble, so the backend's check (and the form's own) says what is missing instead. */}
         <form ref={formRef} onSubmit={handleSubmit} noValidate>
           <OpenSteps.Provider value={steps}>
           {/* 1. Client information */}
+          {shows(1) ? (
           <Section
             icon="people"
             step={1}
@@ -1157,8 +1183,10 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
               </Field>
             </div>
           </Section>
+          ) : null}
 
           {/* 2. Business details */}
+          {shows(2) ? (
           <Section
             icon="briefcase"
             step={2}
@@ -1255,13 +1283,32 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
               />
             </Field>
           </Section>
+          ) : null}
 
           {/* 3. Services and pricing */}
+          {/* The client's services have a page of their own (Services), where they are edited: clicking
+              it saves what is on this form first (making the client, when adding one), then goes there.
+              Embedded on that page, it is the part itself. */}
+          {shows(3) ? (
           <Section
             icon="dollar"
             step={3}
             title="Services and pricing"
-            sub="Select the services the client has agreed to, then set the quantity and price for each. Default prices are pre-filled and can be adjusted for this client."
+            sub={
+              embedded
+                ? "Select the services the client has agreed to, then set the quantity and price for each. Default prices are pre-filled and can be adjusted for this client."
+                : "Saves what you've entered here, then opens the client's services to edit them."
+            }
+            onOpen={
+              embedded
+                ? undefined
+                : () => {
+                    nextPage.current = "services";
+                    setOpening("services");
+                    formRef.current?.requestSubmit();
+                  }
+            }
+            busy={isPending && opening === "services"}
             chips={[...SERVICES.filter((_, index) => services[index]?.on).map((service) => service.name), ...otherServices]}
             badge={{ label: `$${monthly.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo`, tone: "money" }}
           >
@@ -1546,10 +1593,12 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
             </div>
             <div className={hintClass}>Calculated from the services you select. Future add-on rates are saved for later and aren&apos;t included.</div>
           </Section>
+          ) : null}
 
           {/* 4. Onboarding and transfer */}
           {/* The onboarding has a page of its own, where every answer is filled in and edited. Clicking
               it saves what is on this form first (making the client, when adding one), then goes there. */}
+          {shows(4) ? (
           <Section
             icon="checklist"
             step={4}
@@ -1557,14 +1606,16 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
             sub="Saves what you've entered here, then opens the onboarding page to fill everything in."
             chips={[`${ONBOARDING_STEPS.filter(([stepId, , , locked]) => locked || !notNeeded[stepId]).length} of ${ONBOARDING_STEPS.length} steps`]}
             onOpen={() => {
-              toOnboarding.current = true;
-              setOpeningOnboarding(true);
+              nextPage.current = "onboarding";
+              setOpening("onboarding");
               formRef.current?.requestSubmit();
             }}
-            busy={isPending && openingOnboarding}
+            busy={isPending && opening === "onboarding"}
           />
+          ) : null}
 
           {/* 5. Account setup */}
+          {shows(5) ? (
           <Section
             icon="lock"
             step={5}
@@ -1829,6 +1880,7 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
               />
             </Field>
           </Section>
+          ) : null}
           </OpenSteps.Provider>
 
           {error ? (
@@ -1847,9 +1899,15 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
           <div className="flex flex-col-reverse gap-3 rounded-2xl border border-[#e2e8f0] bg-white px-5 py-4 shadow-[0_5px_18px_rgba(15,23,42,0.035)] sm:flex-row sm:items-center sm:justify-between sm:px-6">
             <p className="text-[12.5px] text-[#64748b]">Changes are saved to this client&apos;s record and portal settings.</p>
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
-            <Link href={backHref} className={`${buttonClass} justify-center border-[#dbe3ed] bg-white text-[#334155] no-underline hover:border-[#b8c6d7] hover:bg-[#f8fafc]`}>
-              Cancel
-            </Link>
+            {embedded ? (
+              <button type="button" onClick={embedded.onDone} className={`${buttonClass} justify-center border-[#dbe3ed] bg-white text-[#334155] hover:border-[#b8c6d7] hover:bg-[#f8fafc]`}>
+                Cancel
+              </button>
+            ) : (
+              <Link href={backHref} className={`${buttonClass} justify-center border-[#dbe3ed] bg-white text-[#334155] no-underline hover:border-[#b8c6d7] hover:bg-[#f8fafc]`}>
+                Cancel
+              </Link>
+            )}
             <button type="submit" disabled={isPending} className={`${buttonClass} min-w-36 justify-center border-[#2563eb] bg-[#2563eb] text-white shadow-[0_4px_10px_rgba(37,99,235,0.2)] hover:bg-[#1d4ed8]`}>
               {isPending ? "Saving…" : isEdit ? "Save changes" : "Save client"}
             </button>
@@ -1860,6 +1918,7 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
         {/* Beside the form. It stays at the top of the window while the form scrolls under it; the
             stickiness is on the grid's own column, which is as tall as the form — a wrapper only
             as tall as these cards would have nowhere to stick. */}
+        {embedded ? null : (
         <aside className="sticky top-6 flex max-h-[calc(100vh-3rem)] flex-col gap-4 self-start overflow-y-auto pr-1 max-[960px]:static max-[960px]:order-first max-[960px]:max-h-none">
           {client ? (
             <ClientSaid client={client} />
@@ -1886,6 +1945,7 @@ export const ClientForm = ({ client, staff = [], backHref: cancelHref, only: onl
             </div>
           )}
         </aside>
+        )}
       </div>
     </div>
   );

@@ -1,11 +1,11 @@
 import { auth } from "@/auth";
-import { listClientsAction } from "@/app/actions/clients";
-import { getClientServicesAction, listServicesAction } from "@/app/actions/service";
+import { getClientAction, listClientsAction } from "@/app/actions/clients";
+import { listServicesAction } from "@/app/actions/service";
 import ServicesList from "@/component/services/ServicesList";
 import { getServicesLockAction } from "@/app/actions/servicesLock";
 import ServicesLock from "@/component/services/ServicesLock";
 import { SERVICES_NEED_CODE } from "@/lib/servicesPass";
-import { canAssignServices, canManageServices } from "@/component/services/serviceUi";
+import { canManageClients } from "@/component/clients/clientUi";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -14,8 +14,7 @@ const first = (value: string | string[] | undefined) => (Array.isArray(value) ? 
 // The backend's page-size cap — the client picker offers this many clients.
 const CLIENT_OPTIONS_LIMIT = 100;
 
-// ?client=<id> shows that client's services and monthly payment; without it, the catalog.
-// The catalog is loaded either way: the client's view needs it to offer more services.
+// ?client=<id> shows that client's services; without it, the catalog's totals.
 const ServicesPage = async ({ searchParams }: { searchParams: SearchParams }) => {
   // Behind the security code, when Services asks for it: nothing is loaded until it is entered.
   if (SERVICES_NEED_CODE) {
@@ -25,24 +24,28 @@ const ServicesPage = async ({ searchParams }: { searchParams: SearchParams }) =>
 
   const params = await searchParams;
   const clientId = first(params.client) ?? "all";
+  // From the client form's Services and pricing: open with the services being edited.
+  const startEditing = first(params.edit) === "1";
+  // Opened from the client's page or the client form: the way back to it shows.
+  const fromClient = first(params.from) === "client";
 
-  const [session, clients, catalog, clientServices] = await Promise.all([
+  const [session, clients, catalog, client] = await Promise.all([
     auth(),
     listClientsAction({ limit: CLIENT_OPTIONS_LIMIT }),
     listServicesAction(),
-    clientId === "all" ? null : getClientServicesAction(clientId),
+    // The client's own record: the services recorded on their form, as on their page.
+    clientId === "all" ? null : getClientAction(clientId),
   ]);
 
   return (
     <ServicesList
       catalog={catalog.ok ? catalog.data : undefined}
-      catalogError={catalog.error}
-      clientServices={clientServices?.ok ? clientServices.data : undefined}
-      clientError={clientServices?.error}
-      clients={(clients.data?.clients ?? []).map(({ _id, companyName }) => ({ _id, companyName }))}
+      clients={(clients.data?.clients ?? []).map(({ _id, companyName, contactName }) => ({ _id, companyName, contactName }))}
       clientId={clientId}
-      canManage={canManageServices(session?.user?.role)}
-      canAssign={canAssignServices(session?.user?.role)}
+      client={client?.ok ? client.data : undefined}
+      canEditClient={canManageClients(session?.user?.role)}
+      startEditing={startEditing}
+      fromClient={fromClient}
     />
   );
 };
