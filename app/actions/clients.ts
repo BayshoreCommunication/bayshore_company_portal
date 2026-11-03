@@ -117,6 +117,8 @@ export interface Client {
   notes?: string;
   // The client-portal pages this client is shown. Missing means all of them.
   portalMenus?: string[];
+  // The system messages this client isn't sent ("message.email"). Missing or empty: all of them.
+  messagesOff?: string[];
   // What the team recorded on the add/edit form. Missing for a client from before it asked.
   details?: ClientProfile;
   // What the client answered on the onboarding form, if they went through it.
@@ -364,6 +366,28 @@ export async function updateClientAction(
     const body = await response.json();
     revalidatePath("/clients");
     revalidatePath(`/clients/${id}`);
+    return { ok: true, data: body.data };
+  } catch {
+    return { ok: false, error: "Network error. Please try again." };
+  }
+}
+
+// The system messages one client isn't sent — the whole list (Notifications → Client messages).
+export async function updateClientMessagesAction(id: string, off: string[]): Promise<ClientActionResult<{ messagesOff: string[] }>> {
+  const accessToken = await token();
+  if (!accessToken) return { ok: false, error: "Not authenticated." };
+
+  try {
+    const response = await fetch(`${API}/${id}/messages`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ off }),
+    });
+    if (!response.ok) {
+      const { message } = await parseError(response, "Couldn't save the messages.");
+      return { ok: false, error: message };
+    }
+    const body = await response.json();
     return { ok: true, data: body.data };
   } catch {
     return { ok: false, error: "Network error. Please try again." };

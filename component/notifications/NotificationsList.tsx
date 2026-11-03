@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -144,7 +144,8 @@ const Pagination = ({ pagination, filter }: { pagination: NotificationListData["
 // Unlike the bell — where being shown is being read — a notification here stays unread
 // until it is opened or marked, so this is the place to work through a backlog.
 // `data` is missing when the list couldn't be loaded; `error` says why.
-const NotificationsList = ({ data, error, filter }: { data?: NotificationListData; error?: string; filter: NotificationFilter }) => {
+// `actions`: more of the page's own buttons, beside Mark all as read (Notification management).
+const NotificationsList = ({ data, error, filter, actions }: { data?: NotificationListData; error?: string; filter: NotificationFilter; actions?: ReactNode }) => {
   const router = useRouter();
   const [markingAll, setMarkingAll] = useState(false);
   // Marked read here but not yet confirmed by a fresh list from the server.
@@ -227,6 +228,7 @@ const NotificationsList = ({ data, error, filter }: { data?: NotificationListDat
               : "What your clients did on the content you prepared. You're all caught up."}
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
           onClick={markAll}
@@ -237,6 +239,8 @@ const NotificationsList = ({ data, error, filter }: { data?: NotificationListDat
           {markingAll ? <Loader2 size={14} strokeWidth={2} className="animate-spin" /> : <CheckCheck size={14} strokeWidth={2} />}
           Mark all as read
         </button>
+        {actions}
+        </div>
       </div>
 
       {!data ? (
