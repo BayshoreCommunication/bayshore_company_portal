@@ -122,11 +122,11 @@ const headerDangerAction = "inline-flex h-9 cursor-pointer items-center gap-1.5 
 
 // Label / value rows: a fixed label column, the value beside it.
 const infoTable =
-  "flex flex-col gap-3 [&>div]:grid [&>div]:grid-cols-[110px_1fr] [&>div]:gap-2.5 [&>div]:text-[12.5px] [&>div>span]:font-semibold [&>div>span]:text-[#7a8e9b] [&>div>b]:font-bold [&>div>b]:text-[#17242f]";
+  "flex flex-col gap-3 [&>div]:grid [&>div]:grid-cols-[minmax(0,110px)_minmax(0,1fr)] [&>div]:items-start [&>div]:gap-2.5 max-[420px]:[&>div]:grid-cols-1 max-[420px]:[&>div]:gap-0.5 [&>div]:text-[12.5px] [&>div>span]:font-semibold [&>div>span]:text-[#7a8e9b] [&>div>b]:font-bold [&>div>b]:text-[#17242f]";
 
 // What a field holds — or "None", greyed, when the record has nothing in it.
 const Value = ({ children }: { children?: string | null }) =>
-  children?.trim() ? <b className="whitespace-pre-wrap break-words">{children}</b> : <b className="font-medium! text-[#a3b1ba]!">None</b>;
+  children?.trim() ? <b className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">{children}</b> : <b className="font-medium! text-[#a3b1ba]!">None</b>;
 
 // ── What the team recorded (the add/edit form) ───────────────────────────────
 
