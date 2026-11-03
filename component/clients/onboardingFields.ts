@@ -78,6 +78,10 @@ const emailAccount = (path: string): FieldDef[] => [
 
 export const fieldsOf = (itemId: string): FieldDef[] => {
   if (itemId === "social.email") return emailAccount(itemId);
+  // An account the team added ("social.customAbc…", "google.customAbc…"): kept apart, and either
+  // given by an invite to our access email or by its login — as a Google account is.
+  const custom = /^(social|google)\.(custom[A-Za-z]{8})$/.exec(itemId);
+  if (custom) return account(`${custom[1]}Custom.${custom[2]}`);
   if (itemId.startsWith("social.")) return socialAccount(itemId);
   if (itemId.startsWith("google.")) return account(itemId);
   if (itemId.startsWith("media.")) {
@@ -227,7 +231,7 @@ export const answersFrom = (onboarding: OnboardingAnswers | undefined, fields: F
   const answers: Plain = {};
   for (const section of new Set(fields.map((field) => field.path.split(".")[0]))) {
     const copy = JSON.parse(JSON.stringify(getPath(onboarding, section) ?? {})) as Plain;
-    if (section === "google" || section === "social") {
+    if (section === "google" || section === "social" || section === "socialCustom" || section === "googleCustom") {
       for (const entry of Object.values(copy)) {
         if (isPlain(entry)) {
           delete entry.loginPassword;

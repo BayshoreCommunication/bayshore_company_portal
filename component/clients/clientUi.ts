@@ -454,6 +454,10 @@ const platformStanding = (entry: NonNullable<OnboardingAnswers["domain"]>, creat
 // email; the others only on older answers).
 const LOGIN_ACCOUNTS = ["instagram", "youtube", "linkedin", "tiktok", "x", "email"];
 
+// An account the team added to this client's form ("Discord", on the Social media or Google
+// step), by its key: its login is typed on the form, like the business email's.
+export const isCustomAccount = (id: string) => /^custom[A-Za-z]{8}$/.test(id);
+
 // How a social account's access is given on the platform itself — the client's form (Step 7)
 // walks them through it; no password. Google accounts are shared with our access email instead.
 const SOCIAL_GRANTS: Record<string, string> = {
@@ -481,7 +485,7 @@ const accountItem = (id: string, name: string, account: OnboardingAccount = {}):
           : account.access === "secure"
             ? account.loginUsername && (account.loginPassword || account.loginPasswordSet)
               ? ["Connected — login shared", "ready"]
-              : LOGIN_ACCOUNTS.includes(id)
+              : LOGIN_ACCOUNTS.includes(id) || isCustomAccount(id)
                 ? ["Pending — waiting for the login", "waiting"]
                 : ["Send a secure link for the login", "followup"]
             : ["Access not chosen yet", "waiting"]
@@ -736,8 +740,24 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
         ]),
       ],
     },
-    { id: "google", title: "Google accounts", items: namesOf(GOOGLE_NAMES).map(([key, name]) => accountItem(key, name, onboarding.google?.[key])) },
-    { id: "social", title: "Social media", items: namesOf(SOCIAL_NAMES).map(([key, name]) => accountItem(key, name, onboarding.social?.[key])) },
+    {
+      id: "google",
+      title: "Google accounts",
+      items: [
+        ...namesOf(GOOGLE_NAMES).map(([key, name]) => accountItem(key, name, onboarding.google?.[key])),
+        // Then the team's own, in the order they were added.
+        ...Object.entries(onboarding.googleCustom ?? {}).map(([key, account]) => accountItem(key, account.name, account)),
+      ],
+    },
+    {
+      id: "social",
+      title: "Social media",
+      items: [
+        ...namesOf(SOCIAL_NAMES).map(([key, name]) => accountItem(key, name, onboarding.social?.[key])),
+        // Then the team's own, in the order they were added.
+        ...Object.entries(onboarding.socialCustom ?? {}).map(([key, account]) => accountItem(key, account.name, account)),
+      ],
+    },
     { id: "media", title: "Photos and videos", items: namesOf(MEDIA_NAMES).map(([key, name]) => mediaItem(key, name, onboarding.media?.[key])) },
   ];
 };

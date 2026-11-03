@@ -32,6 +32,7 @@ import {
   Clapperboard,
   Clock,
   Eye,
+  Plus,
   EyeOff,
   Globe,
   Hourglass,
@@ -59,7 +60,7 @@ import {
 } from "lucide-react";
 import { getClientAction, updateClientAction, type Client } from "@/app/actions/clients";
 import { PasswordEye } from "@/component/shared/PasswordModal";
-import { listOnboardingCommentsAction, removeClientOnboardingFileAction, revealOnboardingPasswordAction, updateClientOnboardingAction, type OnboardingAnswers, type OnboardingComment, type OnboardingFile } from "@/app/actions/onboarding";
+import { addCustomAccountAction, type CustomAccountSection, listOnboardingCommentsAction, removeClientOnboardingFileAction, removeCustomAccountAction, revealOnboardingPasswordAction, updateClientOnboardingAction, type OnboardingAnswers, type OnboardingComment, type OnboardingFile } from "@/app/actions/onboarding";
 import { answersFrom, fieldsOf as editFieldsOf, valueOf, type FieldDef } from "./onboardingFields";
 import { formatFileSize } from "@/component/projects/projectUi";
 import OnboardingComments from "./OnboardingComments";
@@ -433,6 +434,115 @@ const ItemEditor = ({ clientId, onboarding, fields, onSaved }: { clientId: strin
   );
 };
 
+// An account of the team's own for this client, added at the foot of the Social media step
+// ("Discord") or the Google step. The client is asked for it like the others: an invite to our
+// access email, or its login.
+const AddCustomAccount = ({ clientId, section, onAdded }: { clientId: string; section: CustomAccountSection; onAdded: (key: string, name: string) => void }) => {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [adding, setAdding] = useState(false);
+  const add = async () => {
+    const wanted = name.trim();
+    if (!wanted) return;
+    setAdding(true);
+    const result = await addCustomAccountAction(clientId, wanted, section);
+    setAdding(false);
+    if (!result.ok || !result.data) return void toast.error(result.error ?? "Couldn't add the account.");
+    toast.success(`${result.data.name} added to the client's form`);
+    onAdded(result.data.key, result.data.name);
+    setName("");
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-[#c7d2fe] bg-[#fafbff] text-[13px] font-semibold text-[#2F5FD8] transition-colors hover:border-[#2F5FD8] hover:bg-[#eef2ff]"
+      >
+        <Plus size={15} strokeWidth={2.25} /> Add custom account
+      </button>
+    );
+  }
+  return (
+    <form
+      onSubmit={(event) => {
+        event.preventDefault();
+        void add();
+      }}
+      className="rounded-xl border border-[#c7d2fe] bg-[#fafbff] p-3.5"
+    >
+      <label htmlFor={`custom-account-${section}`} className="block text-[13px] font-semibold text-[#111827]">
+        Account name
+      </label>
+      <p className="mt-0.5 text-[12px] text-[#6b7280]">
+        The client is asked whether they have it, then to invite our access email or share its login.
+      </p>
+      <div className="mt-2.5 flex flex-wrap gap-2">
+        <input
+          id={`custom-account-${section}`}
+          autoFocus
+          value={name}
+          maxLength={60}
+          onChange={(event) => setName(event.target.value)}
+          placeholder={section === "google" ? "e.g. Google Merchant Center" : "e.g. Discord"}
+          className="h-9 min-w-0 flex-1 rounded-lg border border-[#d1d5db] bg-white px-3 text-[13px] outline-none focus:border-[#2F5FD8]"
+        />
+        <button
+          type="submit"
+          disabled={adding || !name.trim()}
+          className="inline-flex h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-[#2F5FD8] bg-[#2F5FD8] px-4 text-[13px] font-semibold text-white hover:bg-[#2546b0] disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {adding ? <Loader2 size={13} className="animate-spin" /> : <Plus size={14} strokeWidth={2.5} />} Add
+        </button>
+        <button type="button" className={smallButton} onClick={() => setOpen(false)} disabled={adding}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+};
+
+// Taking an account the team added off the client's form, with the client's answers about it:
+// asked once in place.
+const RemoveCustomAccount = ({ clientId, accountKey, name, onRemoved }: { clientId: string; accountKey: string; name: string; onRemoved: () => void }) => {
+  const [asking, setAsking] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const remove = async () => {
+    setRemoving(true);
+    const result = await removeCustomAccountAction(clientId, accountKey);
+    setRemoving(false);
+    if (!result.ok) return void toast.error(result.error ?? "Couldn't take the account off.");
+    toast.success(`${name} taken off the client's form`);
+    onRemoved();
+  };
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-2 text-[12.5px]">
+      {asking ? (
+        <>
+          <span className="text-[#b42318]">Remove {name} and the client&apos;s answers about it?</span>
+          <button
+            type="button"
+            disabled={removing}
+            onClick={() => void remove()}
+            className="inline-flex h-8 cursor-pointer items-center gap-1 rounded-lg bg-[#dc2626] px-3 font-semibold text-white hover:bg-[#b91c1c] disabled:cursor-wait"
+          >
+            {removing ? <Loader2 size={12} className="animate-spin" /> : null} Remove
+          </button>
+          <button type="button" className={smallButton} disabled={removing} onClick={() => setAsking(false)}>
+            Keep it
+          </button>
+        </>
+      ) : (
+        <button type="button" onClick={() => setAsking(true)} className="inline-flex cursor-pointer items-center gap-1.5 font-semibold text-[#b42318] hover:underline">
+          <Trash2 size={13} strokeWidth={2} /> Remove this account
+        </button>
+      )}
+    </div>
+  );
+};
+
 // A password the client shared: the eye opens it behind the security code (PasswordEye), only for
 // those who manage clients.
 const PasswordReveal = ({ clientId, login }: { clientId: string; login: string }) => (
@@ -548,6 +658,24 @@ const OnboardingReview = ({
   // The client's answers change here when the team fills them in.
   const [client, setClient] = useState(initialClient);
   const [answering, setAnswering] = useState(editMode && canManage);
+  // An account the team added, or took off: on the page at once (the client's form hears too).
+  const addCustom = (section: CustomAccountSection, key: string, name: string) =>
+    setClient((now) => {
+      const kept = `${section}Custom` as const;
+      return { ...now, onboarding: { ...(now.onboarding ?? { status: "in_progress" as const }), [kept]: { ...now.onboarding?.[kept], [key]: { name } } } };
+    });
+  const removeCustom = (section: CustomAccountSection, key: string) =>
+    setClient((now) => {
+      const kept = `${section}Custom` as const;
+      const rest = { ...now.onboarding?.[kept] };
+      delete rest[key];
+      return { ...now, onboarding: { ...(now.onboarding ?? { status: "in_progress" as const }), [kept]: rest } };
+    });
+  // The step and key of an account the team added ("google.customAbc…"), or nothing.
+  const customOf = (itemId: string) => {
+    const match = /^(social|google)\.(custom[A-Za-z]{8})$/.exec(itemId);
+    return match ? { section: match[1] as CustomAccountSection, key: match[2] } : null;
+  };
   const saveAnswers = (onboarding: OnboardingAnswers) => setClient((now) => ({ ...now, onboarding: { ...now.onboarding, ...onboarding } }));
   const saveFiles = (kind: UploadKind, files: OnboardingFile[]) =>
     setClient((now) => {
@@ -1184,11 +1312,27 @@ const OnboardingReview = ({
                                   </button>
                                 </div>
                               ) : null}
+                              {canManage && customOf(item.id) ? (
+                                <RemoveCustomAccount
+                                  clientId={client._id}
+                                  accountKey={customOf(item.id)!.key}
+                                  name={item.name}
+                                  onRemoved={() => removeCustom(customOf(item.id)!.section, customOf(item.id)!.key)}
+                                />
+                              ) : null}
                             </div>
                           ) : null}
                         </div>
                       );
                     })}
+                    {canManage && (step.id === "step:social" || step.id === "step:google") ? (
+                      <AddCustomAccount
+                        key={step.id}
+                        clientId={client._id}
+                        section={step.id === "step:google" ? "google" : "social"}
+                        onAdded={(key, name) => addCustom(step.id === "step:google" ? "google" : "social", key, name)}
+                      />
+                    ) : null}
                   </div>
                 </section>
               );

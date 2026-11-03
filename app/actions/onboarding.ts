@@ -129,7 +129,16 @@ export interface OnboardingAnswers {
   google?: Partial<Record<OnboardingGoogleAccount, OnboardingAccount>>;
   // `metaAds` (the ad account behind Facebook and Instagram ads) is asked about at sign-up only.
   social?: Partial<Record<OnboardingSocialAccount, OnboardingAccount>> & { metaAds?: OnboardingAccount };
+  // Social accounts the team added to this client's form ("Discord"), by key ("customAbc…"):
+  // the item "social.<key>", asked like the others.
+  socialCustom?: Record<string, OnboardingCustomAccount>;
+  // The same on the Google step ("google.<key>").
+  googleCustom?: Record<string, OnboardingCustomAccount>;
   media?: Partial<Record<OnboardingMediaKind, OnboardingMedia>>;
+}
+
+export interface OnboardingCustomAccount extends OnboardingAccount {
+  name: string;
 }
 
 // A request as the list shows it: who sent it and where it stands.
@@ -287,6 +296,43 @@ export async function updateClientOnboardingAction(clientId: string, answers: Re
     if (!response.ok) return failure(response, "Couldn't save the answers.");
     const { data } = (await response.json()) as { data: { onboarding: OnboardingAnswers } };
     return { ok: true, data };
+  } catch {
+    return NETWORK_ERROR;
+  }
+}
+
+// An account of the team's own on a client's onboarding form ("Discord") — added, or taken
+// off with its answers (backend: /onboarding/clients/:clientId/custom-accounts). The client's form
+// hears of it at once.
+// `section`: the step it is asked on — Social media, or Google.
+export type CustomAccountSection = "social" | "google";
+export async function addCustomAccountAction(clientId: string, name: string, section: CustomAccountSection = "social"): Promise<OnboardingActionResult<{ key: string; name: string }>> {
+  const accessToken = await token();
+  if (!accessToken) return NOT_SIGNED_IN;
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/onboarding/clients/${clientId}/custom-accounts`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ name, section }),
+    });
+    if (!response.ok) return failure(response, "Couldn't add the account.");
+    const { data } = (await response.json()) as { data: { key: string; name: string } };
+    return { ok: true, data };
+  } catch {
+    return NETWORK_ERROR;
+  }
+}
+
+export async function removeCustomAccountAction(clientId: string, key: string): Promise<OnboardingActionResult<null>> {
+  const accessToken = await token();
+  if (!accessToken) return NOT_SIGNED_IN;
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/onboarding/clients/${clientId}/custom-accounts/${encodeURIComponent(key)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!response.ok) return failure(response, "Couldn't take the account off.");
+    return { ok: true, data: null };
   } catch {
     return NETWORK_ERROR;
   }
