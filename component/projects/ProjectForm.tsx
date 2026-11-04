@@ -173,12 +173,25 @@ const DeleteProject = ({ project }: { project: Project }) => {
 // Pass `project` to edit an existing one; leave it out to open a new one for a
 // client (a request made by phone or in a meeting). `clients` are the ones the
 // signed-in person can see — only needed when adding.
-const ProjectForm = ({ project, clients = [], canDelete = false }: { project?: Project; clients?: ClientOption[]; canDelete?: boolean }) => {
+const ProjectForm = ({
+  project,
+  clients = [],
+  canDelete = false,
+  defaultClient,
+}: {
+  project?: Project;
+  clients?: ClientOption[];
+  canDelete?: boolean;
+  // The client to start with when adding one (a client's "Add project").
+  defaultClient?: string;
+}) => {
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const isEdit = Boolean(project);
 
-  const [client, setClient] = useState(project ? "" : clients.length === 1 ? clients[0]._id : "");
+  const [client, setClient] = useState(
+    project ? "" : defaultClient && clients.some((option) => option._id === defaultClient) ? defaultClient : clients.length === 1 ? clients[0]._id : ""
+  );
   const [name, setName] = useState(project?.name ?? "");
   const [description, setDescription] = useState(project?.description ?? "");
   const [targetDate, setTargetDate] = useState(targetDateInput(project?.targetDate));

@@ -1244,7 +1244,7 @@ const LOGIN_STATUS_LABEL: Record<ClientLogin["status"], string> = {
 };
 
 // The portal password, hidden behind dots until the eye is clicked, with a button to copy it.
-// The portal password: the eye opens it behind the security code (PasswordEye).
+// The portal password: the eye shows it, the copy button copies it (PasswordEye).
 const PasswordValue = ({ clientId }: { clientId: string }) => (
   <b className="flex min-w-0 items-center">
     <PasswordEye label="Portal password" load={() => getClientPortalPasswordAction(clientId)} />

@@ -1,14 +1,15 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { listClientsAction } from "@/app/actions/clients";
-import { listProjectsAction } from "@/app/actions/projects";
+import { listProjectsAction, listProjectsByClientAction } from "@/app/actions/projects";
 import ProjectsList from "@/component/projects/ProjectsList";
 import {
   PROJECTS_PER_PAGE,
   canDeleteProjects,
   canWriteProjects,
   isProjectPriority,
-  isProjectStatus,
+  isProjectStatusFilter,
+  isProjectView,
   projectsHref,
   type ProjectFilters,
 } from "@/component/projects/projectUi";
@@ -24,15 +25,18 @@ const ProjectsPage = async ({ searchParams }: { searchParams: SearchParams }) =>
   const params = await searchParams;
   const rawStatus = first(params.status);
   const rawPriority = first(params.priority);
+  const rawView = first(params.view);
   const filters: ProjectFilters = {
+    view: isProjectView(rawView) ? rawView : "clients",
     client: first(params.client) ?? "all",
-    status: isProjectStatus(rawStatus) ? rawStatus : "all",
+    status: isProjectStatusFilter(rawStatus) ? rawStatus : "all",
     priority: isProjectPriority(rawPriority) ? rawPriority : "all",
     q: first(params.q)?.trim() ?? "",
   };
   const page = Math.max(1, Number(first(params.page)) || 1);
 
-  const [session, result, clients] = await Promise.all([
+  const byClientView = filters.view === "clients";
+  const [session, result, clients, grouped] = await Promise.all([
     auth(),
     listProjectsAction({
       page,
@@ -43,6 +47,14 @@ const ProjectsPage = async ({ searchParams }: { searchParams: SearchParams }) =>
       search: filters.q,
     }),
     listClientsAction({ limit: CLIENT_OPTIONS_LIMIT }),
+    byClientView
+      ? listProjectsByClientAction({
+          client: filters.client === "all" ? undefined : filters.client,
+          status: filters.status,
+          priority: filters.priority,
+          search: filters.q,
+        })
+      : null,
   ]);
 
   // A stale or hand-edited ?page=99 — or deleting the last project on a page —
@@ -58,6 +70,7 @@ const ProjectsPage = async ({ searchParams }: { searchParams: SearchParams }) =>
       clients={(clients.data?.clients ?? []).map(({ _id, companyName }) => ({ _id, companyName }))}
       canWrite={canWriteProjects(session?.user?.role)}
       canDelete={canDeleteProjects(session?.user?.role)}
+      byClient={grouped?.ok ? grouped.data?.byClient : undefined}
     />
   );
 };

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { DollarSign, Pencil } from "lucide-react";
+import { DollarSign, FolderKanban, Pencil } from "lucide-react";
 import type { Client } from "@/app/actions/clients";
 import { ClientForm } from "./ClientAdd";
 import { SERVICES, formatDate, money, sharedOf } from "./clientUi";
@@ -15,6 +16,13 @@ const day = (value?: string) => (value ? formatDate(value) : undefined);
 // A quantity or a price, as its field on the form holds it.
 const fieldValue = (service: string, label: string, value: number) =>
   SERVICES.find((entry) => entry.name === service)?.fields.find((field) => field.label === label)?.money ? money(value) : String(value);
+
+// The project a custom service goes with: where it stands.
+const PROJECT_LOOK = {
+  new: { label: "Project: New", style: { background: "#e3e7fb", color: "#4f46e5" } },
+  in_progress: { label: "Project: In progress", style: { background: "#f8e4c6", color: "#b45309" } },
+  completed: { label: "Project: Completed", style: { background: "#d2e7d8", color: "#15803d" } },
+} as const;
 
 // A custom service is paid once (one saved as monthly before counts as once too).
 const onceOf = (plan: { custom?: boolean; oneTime?: number; monthly: number }) => (plan.custom ? plan.oneTime || plan.monthly : 0);
@@ -82,6 +90,16 @@ const ClientServicePlans = ({ client, canEdit, startEditing = false }: { client:
               <span>
                 {plan.name}
                 {plan.custom ? <span className="ml-2 rounded-full bg-white px-2 py-0.5 text-[10.5px] font-bold text-[#15803d]">Custom</span> : null}
+                {/* A custom service is the client's project too: where it stands, and the way to it. */}
+                {plan.custom ? (
+                  <Link
+                    href={`/projects?client=${client._id}`}
+                    className="ml-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10.5px] font-bold no-underline"
+                    style={PROJECT_LOOK[plan.status === "done" ? "completed" : (plan.stage ?? "new")].style}
+                  >
+                    <FolderKanban size={11} strokeWidth={2.25} /> {PROJECT_LOOK[plan.status === "done" ? "completed" : (plan.stage ?? "new")].label}
+                  </Link>
+                ) : null}
               </span>
               <span className="tabular-nums whitespace-nowrap">{plan.custom ? `${money(onceOf(plan))} one-time` : `${money(plan.monthly)}/mo`}</span>
             </div>

@@ -3,7 +3,6 @@
 import { auth } from "@/auth";
 import { revalidatePath } from "next/cache";
 import { BACKEND_API_URL } from "@/lib/backend";
-import { servicesPass } from "@/lib/servicesPass";
 import type { OnboardingAnswers } from "./onboarding";
 
 const API = `${BACKEND_API_URL}/clients`;
@@ -51,6 +50,10 @@ export interface ClientServicePlan {
   // When it was put on the client and when it was finished (set by the backend).
   addedAt?: string;
   doneAt?: string;
+  // A custom service is the client's project too (Projects page): its id there, and — before it
+  // is done — whether work on it has started.
+  project?: string;
+  stage?: "new" | "in_progress";
 }
 
 export type ClientSocial = "facebook" | "instagram" | "linkedin" | "tiktok" | "youtube" | "x";
@@ -126,7 +129,7 @@ export interface Client {
   // Populated objects on read, plain ids if not populated.
   user?: ClientLogin | string;
   // For those who manage clients: whether the portal login's password can be shown. It is read
-  // only with the security code (getClientPortalPasswordAction).
+  // on request (getClientPortalPasswordAction).
   hasPortalPassword?: boolean;
   accountManager?: ClientStaff | string;
   team: (ClientStaff | string)[];
@@ -252,14 +255,13 @@ export async function listClientsAction(
   }
 }
 
-// The client's portal password — only with the security code's pass; without it, status 423.
+// The client's portal password, for those who manage clients.
 export async function getClientPortalPasswordAction(id: string): Promise<ClientActionResult<{ password: string }>> {
   const accessToken = await token();
   if (!accessToken) return { ok: false, error: "Not authenticated." };
-  const pass = await servicesPass();
   try {
     const response = await fetch(`${API}/${id}/portal-password`, {
-      headers: { Authorization: `Bearer ${accessToken}`, ...(pass ? { "X-Services-Unlock": pass } : {}) },
+      headers: { Authorization: `Bearer ${accessToken}` },
       cache: "no-store",
     });
     if (!response.ok) {

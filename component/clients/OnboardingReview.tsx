@@ -543,7 +543,7 @@ const RemoveCustomAccount = ({ clientId, accountKey, name, onRemoved }: { client
   );
 };
 
-// A password the client shared: the eye opens it behind the security code (PasswordEye), only for
+// A password the client shared: the eye shows it and it can be copied (PasswordEye), only for
 // those who manage clients.
 const PasswordReveal = ({ clientId, login }: { clientId: string; login: string }) => (
   <PasswordEye label="Password" load={() => revealOnboardingPasswordAction(clientId, login)} />

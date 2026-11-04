@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -13,6 +14,7 @@ import {
   Flag,
   FolderKanban,
   FolderOpen,
+  List,
   Loader,
   Loader2,
   Paperclip,
@@ -23,18 +25,21 @@ import {
   SearchX,
   Sparkles,
   Trash2,
+  Users,
   X,
   type LucideIcon,
 } from "lucide-react";
 import {
   deleteProjectAction,
   updateProjectAction,
+  type ClientProjects,
   type Project,
   type ProjectListData,
   type ProjectStatus,
 } from "@/app/actions/projects";
 import { todayInputValue } from "@/component/clients/clientUi";
 import { pageItems } from "@/component/shared/pageItems";
+import ProjectsByClient from "./ProjectsByClient";
 import {
   PROJECT_PRIORITIES as PRIORITIES,
   PROJECT_PRIORITY_KEYS,
@@ -97,33 +102,41 @@ const SelectBox = ({
   </div>
 );
 
+// A count at the top that is also a filter: clicking it shows just those projects.
 const SummaryTile = ({
   icon: Icon,
   label,
-  sub,
   value,
   color,
   background,
+  active,
+  onClick,
 }: {
   icon: LucideIcon;
   label: string;
-  sub: string;
   value: number;
   color: string;
   background: string;
+  active: boolean;
+  onClick: () => void;
 }) => (
-  <div className={`${cardClass} px-4 pt-3.5 pb-4`}>
-    <div className="flex items-center gap-3">
-      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg" style={{ background, color }}>
-        <Icon size={19} strokeWidth={2} />
+  <button
+    type="button"
+    aria-pressed={active}
+    onClick={onClick}
+    className={`${cardClass} flex cursor-pointer items-center gap-3 px-4 py-3.5 text-left transition-colors hover:border-[#c9ced6]`}
+    style={active ? { borderColor: color, boxShadow: `0 0 0 1px ${color}` } : undefined}
+  >
+    <span className="flex size-10 shrink-0 items-center justify-center rounded-lg" style={{ background, color }}>
+      <Icon size={19} strokeWidth={2} />
+    </span>
+    <span className="min-w-0">
+      <span className="block truncate text-[11.5px] font-medium text-[#6b7280]">{label}</span>
+      <span className="mt-0.5 block text-[24px] leading-none font-semibold tabular-nums" style={{ color: value && label === "Overdue" ? color : "#0b0c24" }}>
+        {value}
       </span>
-      <div className="min-w-0">
-        <div className="truncate text-[12px] font-semibold text-[#0b0c24] uppercase">{label}</div>
-        <div className="mt-0.5 truncate text-[11px] text-[#6b7280]">{sub}</div>
-      </div>
-    </div>
-    <div className="mt-3 text-[30px] leading-none font-semibold text-[#0b0c24]">{value}</div>
-  </div>
+    </span>
+  </button>
 );
 
 const StatusPill = ({ status }: { status: ProjectStatus }) => {
@@ -444,6 +457,7 @@ const ProjectsList = ({
   clients,
   canWrite,
   canDelete,
+  byClient,
 }: {
   data?: ProjectListData;
   error?: string;
@@ -451,6 +465,8 @@ const ProjectsList = ({
   clients: ClientOption[];
   canWrite: boolean;
   canDelete: boolean;
+  // The "By client" view's groups (filters.view "clients").
+  byClient?: ClientProjects[];
 }) => {
   const router = useRouter();
   const [isNavigating, startNavigation] = useTransition();
@@ -467,19 +483,22 @@ const ProjectsList = ({
     startNavigation(() => router.replace(projectsHref({ ...filters, ...patch, page: undefined }), { scroll: false }));
 
   const clearFilters = () => navigate({ client: "all", status: "all", priority: "all", q: "" });
+  const byClientView = filters.view === "clients";
 
   return (
     <div className="flex flex-col gap-4.5">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="text-[28px] leading-tight font-bold text-[#0b0c24]">Client Projects</div>
-          <div className="mt-1 text-[12.5px] text-[#4b5563]">Larger pieces of work your clients have asked for, from their portal or through you.</div>
+          <div className="mt-1 text-[12.5px] text-[#4b5563]">One-time work for your clients — every custom service on a client is a project here.</div>
         </div>
-        {canWrite ? (
-          <Link href="/projects/add" className={`${addButtonClass} h-9.5 px-4`}>
-            <Plus size={14} strokeWidth={2.5} /> Add Project
-          </Link>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          {canWrite ? (
+            <Link href={filters.client !== "all" ? `/projects/add?client=${filters.client}` : "/projects/add"} className={`${addButtonClass} h-9.5 px-4`}>
+              <Plus size={14} strokeWidth={2.5} /> Add Project
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {!data ? (
@@ -488,21 +507,52 @@ const ProjectsList = ({
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryTile
-              icon={FolderKanban}
-              label="Total Projects"
-              sub={showClient ? "Across all clients" : "For this client"}
-              value={data.summary.total}
-              color="#2f5fd8"
-              background="#d9e0ef"
-            />
-            <SummaryTile icon={Sparkles} label="New" sub="Waiting to be started" value={data.summary.new} color="#4f46e5" background="#e3e7fb" />
-            <SummaryTile icon={Loader} label="In Progress" sub="Being worked on" value={data.summary.in_progress} color="#d97706" background="#f8e4c6" />
-            <SummaryTile icon={CheckCircle2} label="Completed" sub="Delivered to the client" value={data.summary.completed} color="#16a34a" background="#d2e7d8" />
+          <div className="grid grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-5">
+            {(
+              [
+                ["all", FolderKanban, "All projects", data.summary.total, "#2f5fd8", "#d9e0ef"],
+                ["new", Sparkles, STATUSES.new.label, data.summary.new, "#4f46e5", "#e3e7fb"],
+                ["in_progress", Loader, STATUSES.in_progress.label, data.summary.in_progress, "#d97706", "#f8e4c6"],
+                ["completed", CheckCircle2, STATUSES.completed.label, data.summary.completed, "#16a34a", "#d2e7d8"],
+                ["overdue", AlertTriangle, "Overdue", data.summary.overdue ?? 0, "#dc2626", "#fbe1e1"],
+              ] as const
+            ).map(([status, icon, label, value, color, background]) => (
+              <SummaryTile
+                key={status}
+                icon={icon}
+                label={label}
+                value={value}
+                color={color}
+                background={background}
+                active={filters.status === status}
+                onClick={() => navigate({ status: filters.status === status ? "all" : status })}
+              />
+            ))}
           </div>
 
           <div className={`${cardClass} flex flex-wrap items-center gap-3 p-3.5`}>
+            {/* Under each client, or one list of every project. */}
+            <nav aria-label="Projects view" className="flex items-center rounded-lg bg-[#f1f3f5] p-0.5">
+              {(
+                [
+                  ["clients", "By client", Users],
+                  ["list", "All projects", List],
+                ] as const
+              ).map(([view, label, Icon]) => (
+                <button
+                  key={view}
+                  type="button"
+                  aria-pressed={filters.view === view}
+                  onClick={() => navigate({ view })}
+                  className={`inline-flex h-8.5 cursor-pointer items-center gap-1.5 rounded-md px-3 text-[12px] font-medium transition-colors ${
+                    filters.view === view ? "bg-white text-[#0b0c24] shadow-[0_1px_2px_rgba(15,23,42,0.12)]" : "text-[#6b7280] hover:text-[#0b0c24]"
+                  }`}
+                >
+                  <Icon size={13.5} strokeWidth={2} /> {label}
+                </button>
+              ))}
+            </nav>
+            <span aria-hidden className="h-6 w-px bg-[#e6e8eb] max-sm:hidden" />
             {clients.length > 1 ? (
               <SelectBox label="Client" value={filters.client} onChange={(value) => navigate({ client: value })}>
                 <option value="all">All Clients</option>
@@ -513,14 +563,6 @@ const ProjectsList = ({
                 ))}
               </SelectBox>
             ) : null}
-            <SelectBox label="Project status" value={filters.status} onChange={(value) => navigate({ status: value as ProjectFilters["status"] })}>
-              <option value="all">All Statuses</option>
-              {PROJECT_STATUS_KEYS.map((key) => (
-                <option key={key} value={key}>
-                  {STATUSES[key].label}
-                </option>
-              ))}
-            </SelectBox>
             <SelectBox label="Priority" value={filters.priority} onChange={(value) => navigate({ priority: value as ProjectFilters["priority"] })}>
               <option value="all">All Priorities</option>
               {PROJECT_PRIORITY_KEYS.map((key) => (
@@ -541,6 +583,29 @@ const ProjectsList = ({
             <SearchBox search={filters.q} onSearch={(q) => navigate({ q })} />
           </div>
 
+          {byClientView ? (
+            <div className={`transition-opacity ${isNavigating ? "opacity-60" : ""}`} aria-busy={isNavigating}>
+              <ProjectsByClient
+                groups={byClient ?? []}
+                today={today}
+                canWrite={canWrite}
+                statusOf={(project) => (canWrite ? <StatusSelect project={project} /> : <StatusPill status={project.status} />)}
+                empty={
+                  <div className="flex flex-col items-center px-5 py-11 text-center">
+                    <div className="mb-3.5 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#d9e0ef] text-[#2f5fd8]">
+                      {hasFilters ? <SearchX size={24} strokeWidth={1.8} /> : <FolderOpen size={24} strokeWidth={1.8} />}
+                    </div>
+                    <div className="text-lg font-semibold text-[#0b0c24]">{hasFilters ? "No projects match these filters" : "No custom projects yet"}</div>
+                    <div className="mt-2 max-w-96 text-[12.5px] leading-normal text-[#4b5563]">
+                      {hasFilters
+                        ? "Try a different client, status, priority or search."
+                        : "A client's custom services are its projects. Add one here, or as a custom service on the client's Services and pricing."}
+                    </div>
+                  </div>
+                }
+              />
+            </div>
+          ) : (
           <div className={`${cardClass} p-3.5 transition-opacity ${isNavigating ? "opacity-60" : ""}`} aria-busy={isNavigating}>
             {data.projects.length === 0 ? (
               <div className="flex flex-col items-center px-5 py-11 text-center">
@@ -680,6 +745,7 @@ const ProjectsList = ({
               </>
             )}
           </div>
+          )}
         </>
       )}
     </div>

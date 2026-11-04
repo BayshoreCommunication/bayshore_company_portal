@@ -1,4 +1,4 @@
-import type { Project, ProjectPriority, ProjectStatus } from "@/app/actions/projects";
+import type { Project, ProjectPriority, ProjectStatus, ProjectStatusFilter } from "@/app/actions/projects";
 
 export const PROJECTS_PER_PAGE = 10;
 
@@ -16,12 +16,13 @@ export const PROJECT_STATUS_KEYS = Object.keys(PROJECT_STATUSES) as ProjectStatu
 // Priority is a colored flag, not a pill, so it never reads as a status.
 export const PROJECT_PRIORITIES: Record<ProjectPriority, { label: string; color: string }> = {
   high: { label: "High", color: "#dc2626" },
-  normal: { label: "Normal", color: "#2563eb" },
-  low: { label: "Low", color: "#8496a3" },
+  normal: { label: "Normal", color: "#6b7280" },
+  low: { label: "Low", color: "#a3acb8" },
 };
 export const PROJECT_PRIORITY_KEYS = Object.keys(PROJECT_PRIORITIES) as ProjectPriority[];
 
 export const isProjectStatus = (value?: string): value is ProjectStatus => PROJECT_STATUS_KEYS.includes(value as ProjectStatus);
+export const isProjectStatusFilter = (value?: string): value is Exclude<ProjectStatusFilter, "all"> => value === "overdue" || isProjectStatus(value);
 export const isProjectPriority = (value?: string): value is ProjectPriority =>
   PROJECT_PRIORITY_KEYS.includes(value as ProjectPriority);
 
@@ -110,10 +111,15 @@ export const dueNote = (project: Pick<Project, "targetDate" | "status">, today: 
 
 // ── Links ────────────────────────────────────────────────────────────────────
 
+// How the list is laid out: under each client (the default), or one list of every project.
+export type ProjectView = "clients" | "list";
+export const isProjectView = (value?: string): value is ProjectView => value === "clients" || value === "list";
+
 export interface ProjectFilters {
+  view: ProjectView;
   // "all", or a client id.
   client: string;
-  status: ProjectStatus | "all";
+  status: ProjectStatusFilter;
   priority: ProjectPriority | "all";
   q: string;
   page?: number;
@@ -121,6 +127,7 @@ export interface ProjectFilters {
 
 export const projectsHref = (filters: Partial<ProjectFilters>) => {
   const params = new URLSearchParams();
+  if (filters.view === "list") params.set("view", "list");
   if (filters.client && filters.client !== "all") params.set("client", filters.client);
   if (filters.status && filters.status !== "all") params.set("status", filters.status);
   if (filters.priority && filters.priority !== "all") params.set("priority", filters.priority);

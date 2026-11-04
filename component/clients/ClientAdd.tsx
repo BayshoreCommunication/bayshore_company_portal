@@ -619,6 +619,8 @@ type CustomService = {
   draft: string;
   // The work is finished: kept on the client as history, not billed (backend: status "done").
   done?: boolean;
+  // The project it goes with (a custom service is a project too), sent back as it came.
+  project?: string;
 };
 
 // A choice that isn't on the list was typed in under "Other".
@@ -844,6 +846,7 @@ export const ClientForm = ({
         included: (plan.included ?? []).map((text) => ({ text, on: true })),
         draft: "",
         done: plan.status === "done",
+        project: plan.project,
       })),
       ...unpriced.map((name) => ({ key: name, name, price: "", billing: "one_time" as Billing, deadline: "", included: [], draft: "" })),
     ];
@@ -1003,6 +1006,7 @@ export const ClientForm = ({
             addons: [],
             custom: true,
             ...(custom.done ? { status: "done" as const } : {}),
+            ...(custom.project ? { project: custom.project } : {}),
           })),
       ),
       transfer: {

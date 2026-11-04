@@ -47,15 +47,22 @@ export interface Project {
   // Stamped by the backend as the status moves.
   startedAt?: string;
   completedAt?: string;
+  // A project is a custom service on the client: what it is charged, once set (0 until then).
+  price?: number;
   createdAt: string;
   updatedAt: string;
 }
+
+// The tiles: how many there are in each status, and how many are past their deadline.
+export type ProjectSummary = Record<"total" | ProjectStatus | "overdue", number>;
+// What the list can be narrowed to: a status, or "overdue" (not done, past its deadline).
+export type ProjectStatusFilter = "all" | ProjectStatus | "overdue";
 
 export interface ProjectListData {
   projects: Project[];
   // Per status for the client filter only — it doesn't change when the list is
   // narrowed by status, priority or search.
-  summary: Record<"total" | ProjectStatus, number>;
+  summary: ProjectSummary;
   pagination: {
     total: number;
     page: number;
@@ -64,6 +71,22 @@ export interface ProjectListData {
     hasPreviousPage: boolean;
     hasNextPage: boolean;
   };
+}
+
+// One client's projects, and how they stand (the "By client" view).
+export interface ClientProjects {
+  client: ProjectClient;
+  counts: Record<"total" | ProjectStatus, number>;
+  // Not finished, with the deadline passed.
+  overdue: number;
+  // The soonest deadline still to come ("2026-11-20"), if any.
+  nextDue: string | null;
+  projects: Project[];
+}
+
+export interface ProjectsByClientData {
+  byClient: ClientProjects[];
+  summary: ProjectSummary;
 }
 
 export interface ProjectFieldsInput {
@@ -123,7 +146,7 @@ export async function listProjectsAction(
     page?: number;
     limit?: number;
     client?: string;
-    status?: "all" | ProjectStatus;
+    status?: ProjectStatusFilter;
     priority?: "all" | ProjectPriority;
     // Matches the project's name or description, or the client's company name.
     search?: string;
@@ -162,6 +185,27 @@ export async function listProjectsAction(
         },
       },
     };
+  } catch {
+    return NETWORK_ERROR;
+  }
+}
+
+// Every project that matches, under its client (backend: GET /projects?group=client).
+export async function listProjectsByClientAction(
+  params: { client?: string; status?: ProjectStatusFilter; priority?: "all" | ProjectPriority; search?: string } = {},
+): Promise<ProjectActionResult<ProjectsByClientData>> {
+  const accessToken = await token();
+  if (!accessToken) return NOT_SIGNED_IN;
+  try {
+    const query = new URLSearchParams({ group: "client" });
+    if (params.client) query.set("client", params.client);
+    if (params.status && params.status !== "all") query.set("status", params.status);
+    if (params.priority && params.priority !== "all") query.set("priority", params.priority);
+    if (params.search?.trim()) query.set("q", params.search.trim());
+    const response = await fetch(`${API}?${query}`, { headers: authorised(accessToken), cache: "no-store" });
+    if (!response.ok) return failure(response, "Failed to fetch projects.");
+    const { data } = await response.json();
+    return { ok: true, data };
   } catch {
     return NETWORK_ERROR;
   }
