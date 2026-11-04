@@ -18,6 +18,8 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment, type MouseEvent } from "react";
+import { countUnreadMessagesAction } from "@/app/actions/messages";
+import { useUnreadMessages } from "@/component/messages/chat";
 import { useNavigation } from "./Navigation";
 
 type NavItem = {
@@ -49,7 +51,7 @@ const NAV_SECTIONS: NavSection[] = [
     heading: "Workspace",
     items: [
       { label: "Calendar", icon: Calendar, href: "/calendar" },
-      { label: "Messages", icon: MessageSquare, href: "/messages", badge: 2 },
+      { label: "Messages", icon: MessageSquare, href: "/messages" },
       { label: "Payments", icon: CreditCard, href: "/payments" },
     ],
   },
@@ -64,6 +66,8 @@ const NAV_SECTIONS: NavSection[] = [
 
 const Sidebar = () => {
   const pathname = usePathname();
+  // Messages from clients not read yet.
+  const unread = useUnreadMessages(countUnreadMessagesAction, "team");
   // `target` is where a click is taking us: its row lights up, and the page area shows that
   // page's skeleton, straight away instead of when the server has answered.
   const { target, navigate } = useNavigation();
@@ -90,7 +94,8 @@ const Sidebar = () => {
             <li className="px-3 pt-4.5 pb-1.5 text-[10px] font-bold tracking-[1px] text-[#485b6d] uppercase">
               {section.heading}
             </li>
-            {section.items.map((item) => {
+            {section.items.map((listed) => {
+              const item = listed.href === "/messages" ? { ...listed, badge: unread } : listed;
               const isActive = target ? target === item.href : pathname.startsWith(item.href);
               const Icon = item.icon;
 
@@ -111,7 +116,7 @@ const Sidebar = () => {
                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
                     {item.badge ? (
                       <span className="flex h-4.5 min-w-4.5 shrink-0 items-center justify-center rounded-full bg-[#dc2626] px-1 text-[10.5px] font-bold text-white">
-                        {item.badge}
+                        {item.badge > 99 ? "99+" : item.badge}
                       </span>
                     ) : null}
                   </Link>
