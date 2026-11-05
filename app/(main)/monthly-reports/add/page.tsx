@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { listClientsAction } from "@/app/actions/clients";
+import { clientOptionsWith } from "@/app/actions/clients";
 import AddReport from "@/component/monthly-reports/AddReport";
 import { canWriteReports } from "@/component/monthly-reports/reportUi";
 
@@ -13,12 +13,12 @@ const AddReportPage = async ({ searchParams }: { searchParams: SearchParams }) =
   const role = session?.user?.role ?? "";
   if (!canWriteReports(role)) redirect("/monthly-reports");
 
-  // The clients this person can write reports for. A long list is cut at the API's page size.
-  const clients = await listClientsAction({ limit: 100 });
+  // The clients this person can write reports for — the one the link names always among them.
+  const { clients } = await clientOptionsWith(client);
 
   return (
     <AddReport
-      clients={(clients.data?.clients ?? []).map(({ _id, companyName }) => ({ _id, companyName }))}
+      clients={clients.map(({ _id, companyName }) => ({ _id, companyName }))}
       role={role}
       userName={session?.user?.name ?? ""}
       initialClientId={client ?? ""}

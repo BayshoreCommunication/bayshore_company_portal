@@ -42,7 +42,8 @@ import {
   sectionCard,
   textareaBase,
 } from "@/component/shared/ui";
-import { extendPiece, sliceFiles } from "./upload";
+import { extendPiece, sliceFiles, uploadFailureMessage } from "./upload";
+import { keepSessionAction } from "@/app/actions/auth";
 import {
   BATCH_OPTIONS,
   type Batch,
@@ -70,6 +71,7 @@ import {
   mediaOf,
   personNameOf,
   uploadNoun,
+  alertTooBigVideos,
   uploadProblem,
   type ContentKind,
 } from "./contentUi";
@@ -357,6 +359,8 @@ const ContentBlock = ({
   // Turn picked files into previewable uploads, keeping only what this kind accepts.
   const toUploads = (picked: File[]) => {
     const fitsKind = picked.filter((file) => spec.media.includes(mediaOf(file)));
+    // A video over 200MB: said out loud, not only on the piece.
+    alertTooBigVideos(fitsKind, toast.error);
     const problems = fitsKind.map(uploadProblem).filter(Boolean);
     const allowed = fitsKind.filter((file) => !uploadProblem(file));
     if (fitsKind.length < picked.length) setError(`${spec.label} takes ${uploadNoun(type)} only — some files were skipped.`);
@@ -652,7 +656,7 @@ const uploadBatch = (form: FormData, onProgress: (percent: number) => void) =>
     request.onload = () =>
       resolve({
         status: request.status,
-        body: (request.response as ContentBatchResponse | null) ?? { success: false, message: "The server sent an unexpected response." },
+        body: (request.response as ContentBatchResponse | null) ?? { success: false, message: uploadFailureMessage(request.status) },
       });
     request.onerror = () => reject(new Error("Network error"));
     request.send(form);
@@ -920,6 +924,8 @@ const AddContent = ({
 
     setSavingAs(status);
     setUploadProgress(0);
+    // A form kept open a long while: the session is renewed before the files go up.
+    await keepSessionAction().catch(() => undefined);
     try {
       // Pieces an earlier save left half-way come first.
       for (const part of parts) {

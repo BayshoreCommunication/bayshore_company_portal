@@ -177,6 +177,8 @@ interface ReportActionResult<T> {
   fieldErrors?: string[];
   // HTTP status of a failed request, so pages can tell "not found" from other errors.
   status?: number;
+  // A report for that client and period is already there (409): its id, to open it.
+  existingId?: string;
 }
 
 async function token() {
@@ -187,14 +189,16 @@ async function token() {
 async function failure(response: Response, fallback: string) {
   let message = fallback;
   let errors: string[] | undefined;
+  let existingId: string | undefined;
   try {
     const body = await response.json();
     if (typeof body?.message === "string") message = body.message;
     if (Array.isArray(body?.errors) && body.errors.length) errors = body.errors as string[];
+    if (typeof body?.data?.existingId === "string") existingId = body.data.existingId;
   } catch {
     // Not JSON — keep the fallback message.
   }
-  return { ok: false as const, error: message, fieldErrors: errors, status: response.status };
+  return { ok: false as const, error: message, fieldErrors: errors, status: response.status, existingId };
 }
 
 const NOT_SIGNED_IN = { ok: false as const, error: "Not authenticated." };

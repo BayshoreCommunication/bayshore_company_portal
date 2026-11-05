@@ -7,8 +7,8 @@ import { changeContentStatusAction, type ContentFile, type ContentItem, type Con
 import { btnDraft, btnPrimary } from "@/component/shared/ui";
 import { postComment } from "./CommentThread";
 import { MEDIA_ICON, ThumbnailField, toThumbnail, type Upload } from "./contentForm";
-import { extendPiece, sliceFiles } from "./upload";
-import { CONTENT_KINDS, filesOf, mediaOf, uploadHint, uploadProblem } from "./contentUi";
+import { extendPiece, sliceFiles, uploadFailureMessage } from "./upload";
+import { CONTENT_KINDS, filesOf, mediaOf, uploadHint, uploadProblem, alertTooBigVideos } from "./contentUi";
 
 // The backend's limits (models/content.model.ts, validators/content.validator.ts).
 const CAPTION_MAX = 2000;
@@ -43,7 +43,7 @@ const savePiece = (id: string, form: FormData, onProgress: (percent: number) => 
     request.onload = () =>
       resolve({
         status: request.status,
-        body: (request.response as SaveResponse | null) ?? { success: false, message: "The server sent an unexpected response." },
+        body: (request.response as SaveResponse | null) ?? { success: false, message: uploadFailureMessage(request.status) },
       });
     request.onerror = () => reject(new Error("Network error"));
     request.send(form);
@@ -153,6 +153,8 @@ const RevisionReply = ({
   const addFiles = (files: File[]) => {
     const wrong = files.filter((file) => !spec.media.includes(mediaOf(file)));
     const usable = files.filter((file) => spec.media.includes(mediaOf(file)));
+    // A video over 200MB: said out loud, not only on the piece.
+    alertTooBigVideos(usable, toast.error);
     const problems = usable.map(uploadProblem).filter(Boolean);
     const allowed = usable.filter((file) => !uploadProblem(file));
     if (wrong.length) toast.error(`${spec.label} takes ${spec.media.join(" or ")} files only — ${wrong.length} skipped.`);

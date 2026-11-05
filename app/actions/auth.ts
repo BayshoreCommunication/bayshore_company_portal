@@ -72,3 +72,8 @@ export async function signOutAction() {
 
   await signOut({ redirectTo: "/sign-in" });
 }
+
+// Does nothing — but, being a request to a page, it passes through proxy.ts, which renews the
+// session's access token when it is near its end. Upload routes (/api/…) skip the proxy, so a page
+// calls this before a long upload: the upload then goes with a token that won't run out on the way.
+export async function keepSessionAction(): Promise<void> {}

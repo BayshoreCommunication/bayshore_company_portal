@@ -427,6 +427,8 @@ const ReportForm = ({
   // Which button was pressed, so that one shows the spinner.
   const [pressed, setPressed] = useState<ReportStatus | "save">("save");
   const [problems, setProblems] = useState<string[]>([]);
+  // The report already filed for the chosen client and period, when saving found one.
+  const [existingId, setExistingId] = useState<string | null>(null);
 
   const disabled = readOnly || isPending;
   const includedCount = Object.values(included).filter(Boolean).length;
@@ -450,6 +452,7 @@ const ReportForm = ({
     setPressed(target ?? "save");
     setError(null);
     setProblems([]);
+    setExistingId(null);
 
     const { content, problems: found } = buildContent(values, included, isEdit);
     if (!isEdit && !values.clientId) found.unshift("Select a client");
@@ -470,6 +473,8 @@ const ReportForm = ({
       if (!saved.ok || !saved.data) {
         setError(saved.error ?? "Something went wrong.");
         setProblems(saved.fieldErrors ?? []);
+        // A report for that month (or week) is already there: the way to it.
+        setExistingId("existingId" in saved ? (saved.existingId ?? null) : null);
         toast.error(saved.error ?? "Something went wrong.");
         return;
       }
@@ -584,6 +589,11 @@ const ReportForm = ({
                 <li key={message}>{message}</li>
               ))}
             </ul>
+          ) : null}
+          {existingId ? (
+            <Link href={`/monthly-reports/${existingId}/edit`} className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-[12.5px] font-semibold text-[#1d4ed8] no-underline ring-1 ring-[#bfdbfe] hover:bg-[#eff6ff]">
+              Open the existing report →
+            </Link>
           ) : null}
         </div>
       ) : null}

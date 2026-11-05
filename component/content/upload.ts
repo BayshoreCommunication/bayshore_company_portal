@@ -5,6 +5,16 @@ import { MAX_BYTES_PER_REQUEST, MAX_FILES_PER_REQUEST } from "./contentUi";
 
 export type UploadResponse = { success: boolean; message: string; errors?: string[] };
 
+// What to say when the answer isn't the API's (a proxy or host stopped the upload on the way).
+export const uploadFailureMessage = (status: number) =>
+  status === 413
+    ? "These files are too big to send in one go. Try saving fewer files at a time, or smaller ones."
+    : status === 502 || status === 503 || status === 504 || status === 0
+      ? "The upload took too long or the server didn't answer. Check your connection and save again — anything already saved stays."
+      : status === 401
+        ? "Your session has ended — refresh the page and sign in again, then save."
+        : `The upload didn't go through (error ${status}). Please save again.`;
+
 // The files, split into lots one request can carry: so many files, so many bytes in each.
 // A file bigger than a lot goes up on its own.
 export const sliceFiles = <T extends { size: number }>(files: T[]): T[][] => {
@@ -35,7 +45,7 @@ export const patchPiece = <Body extends UploadResponse = UploadResponse>(id: str
     request.onload = () =>
       resolve({
         status: request.status,
-        body: (request.response as Body | null) ?? ({ success: false, message: "The server sent an unexpected response." } as Body),
+        body: (request.response as Body | null) ?? ({ success: false, message: uploadFailureMessage(request.status) } as Body),
       });
     request.onerror = () => reject(new Error("Network error"));
     request.send(form);

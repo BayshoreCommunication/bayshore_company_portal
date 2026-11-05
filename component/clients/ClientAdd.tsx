@@ -966,6 +966,9 @@ export const ClientForm = ({
     };
     const serviceTypes = [...SERVICES.filter((_, index) => services[index].on).map((service) => service.name), ...otherServices];
     if (methods.length === 0) return refuse("Select at least one way to communicate with the client.");
+    // A new client always gets a portal login: they are emailed its password.
+    if (!client && !password) return refuse("Set a portal password — the client signs in with it, and it's sent to them by email.");
+    if (changePassword && password.length < 8) return refuse("The portal password must be at least 8 characters.");
     if (changePassword && password !== confirmPassword) return refuse("Passwords do not match.");
 
     // Everything the form asks beyond the contact details, as the client's record keeps it.
@@ -1070,7 +1073,7 @@ export const ClientForm = ({
       // team has chosen to set or replace its password.
       const result = client
         ? await updateClientAction(client._id, { ...input, ...(changePassword ? { password } : {}) })
-        : await createClientAction({ ...input, ...(changePassword ? { password } : {}) });
+        : await createClientAction({ ...input, password });
 
       if (!result.ok) {
         setError(result.error ?? "Something went wrong.");
@@ -1083,7 +1086,16 @@ export const ClientForm = ({
       const savedId = client?._id ?? (result.data && "client" in result.data ? result.data.client._id : undefined);
       // On the way to a part's own page, the save is quiet: the page itself is the next step.
       if (then && savedId) return router.push(then === "onboarding" ? `/clients/${savedId}/onboarding?edit=1` : `/services?client=${savedId}&edit=1&from=client`);
-      toast.success(client ? "Client updated successfully" : "Client created successfully");
+      if (client) {
+        // A new sign-in email or password: say whether the client was emailed it.
+        const loginEmailed = result.data && "loginEmailed" in result.data ? (result.data as { loginEmailed?: boolean }).loginEmailed : undefined;
+        const signInEmail = email.trim().toLowerCase();
+        if (loginEmailed === true) toast.success(`Client updated — their new sign-in details were emailed to ${signInEmail}`);
+        else if (loginEmailed === false) toast.error(`Client updated, but the email to ${signInEmail} couldn't be sent (or their sign-in emails are switched off).`, { duration: 8000 });
+        else toast.success("Client updated successfully");
+      }
+      else if (result.data && "welcomeEmailed" in result.data && result.data.welcomeEmailed) toast.success(`Client created — their login details were emailed to ${email}`);
+      else toast.error(`Client created, but the welcome email to ${email} couldn't be sent. Share their login with them, or set a new password later to send it again.`, { duration: 8000 });
       if (embedded) {
         embedded.onDone();
         router.refresh();
@@ -1789,13 +1801,21 @@ export const ClientForm = ({
               </Field>
             ) : null}
 
-            {/* The portal password: always shown. On a new client it creates their login (blank = no login);
-                on an existing one it sets or replaces it (blank = keep the current one). */}
+            {/* The portal password: always shown. On a new client it is required — it creates their
+                login, and goes to them in the welcome email; on an existing one it sets or replaces
+                it (blank = keep the current one). */}
             <div className={rowClass}>
               <Field
                 label="Portal password"
                 htmlFor={`${id}-password`}
-                hint={client?.user ? "Leave blank to keep their current password. At least 8 characters." : "At least 8 characters. Leave blank if the client doesn't need a portal login."}
+                required={!client}
+                hint={
+                  client?.user
+                    ? "Leave blank to keep their current password. At least 8 characters."
+                    : client
+                      ? "At least 8 characters. Sets up their portal login and emails it to them."
+                      : "Required — at least 8 characters. The client gets it by email with their sign-in link."
+                }
               >
                 <div className="relative">
                   <input
@@ -1806,6 +1826,7 @@ export const ClientForm = ({
                     maxLength={72}
                     autoComplete="new-password"
                     placeholder={client?.user ? "Enter a new password" : "Enter a password"}
+                    aria-required={!client}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                   />

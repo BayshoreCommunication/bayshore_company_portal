@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { BACKEND_API_URL } from "@/lib/backend";
+import { uploadFailureMessage } from "@/component/content/upload";
 
 // Streams a multipart upload from the browser on to the backend with the signed-in
 // user's token — never buffered in full. Upload routes use this instead of server
@@ -27,7 +28,7 @@ export async function forwardUpload(request: Request, path: string, method: "POS
       duplex: "half",
     } as RequestInit & { duplex: "half" });
 
-    const body = await response.json().catch(() => ({ success: false, message: "The server sent an unexpected response." }));
+    const body = await response.json().catch(() => ({ success: false, message: uploadFailureMessage(response.status) }));
     if (response.ok) refresh.forEach((page) => revalidatePath(page));
     return Response.json(body, { status: response.status });
   } catch {

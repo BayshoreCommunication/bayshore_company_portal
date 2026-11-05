@@ -39,7 +39,8 @@ import {
 } from "@/component/shared/ui";
 import CommentThread from "./CommentThread";
 import GroupPieces from "./GroupPieces";
-import { extendPiece, sliceFiles } from "./upload";
+import { extendPiece, sliceFiles, uploadFailureMessage } from "./upload";
+import { keepSessionAction } from "@/app/actions/auth";
 import {
   BATCH_OPTIONS,
   type Batch,
@@ -66,6 +67,7 @@ import {
   personNameOf,
   piecesOf,
   uploadNoun,
+  alertTooBigVideos,
   uploadProblem,
 } from "./contentUi";
 
@@ -119,7 +121,7 @@ const uploadChanges = (id: string, form: FormData, onProgress: (percent: number)
     request.onload = () =>
       resolve({
         status: request.status,
-        body: (request.response as SaveResponse | null) ?? { success: false, message: "The server sent an unexpected response." },
+        body: (request.response as SaveResponse | null) ?? { success: false, message: uploadFailureMessage(request.status) },
       });
     request.onerror = () => reject(new Error("Network error"));
     request.send(form);
@@ -214,6 +216,8 @@ const EditContent = ({ item, canReview }: { item: ContentItem; canReview: boolea
   // Turn picked files into previewable uploads, keeping only what this kind accepts.
   const toUploads = (picked: File[]) => {
     const fitsKind = picked.filter((file) => spec.media.includes(mediaOf(file)));
+    // A video over 200MB: said out loud, not only on the piece.
+    alertTooBigVideos(fitsKind, toast.error);
     const problems = fitsKind.map(uploadProblem).filter(Boolean);
     const allowed = fitsKind.filter((file) => !uploadProblem(file));
     if (fitsKind.length < picked.length) setError(`${spec.label} takes ${uploadNoun(kind)} only — some files were skipped.`);
@@ -330,6 +334,8 @@ const EditContent = ({ item, canReview }: { item: ContentItem; canReview: boolea
 
     setSavingAs(andSend ? "send" : thenNext ? "next" : "save");
     setUploadProgress(0);
+    // A form kept open a long while: the session is renewed before the files go up.
+    await keepSessionAction().catch(() => undefined);
     try {
       if (dirty) {
         const { status, body } = await uploadChanges(item._id, form, (percent) => showProgress(headBytes, percent));

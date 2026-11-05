@@ -347,17 +347,21 @@ const Details = ({
 
 // ── One conversation ─────────────────────────────────────────────────────────
 
-const Thread = ({
+// Also on a client's own page (ClientDetails → Messages), without the way back to the inbox and
+// with the details beside it closed: the page itself is about the client.
+export const Thread = ({
   client,
   initial,
   onBack,
+  withDetails = true,
 }: {
   client: ClientOption;
   initial: MessagePage | null;
-  onBack: () => void;
+  onBack?: () => void;
+  withDetails?: boolean;
 }) => {
   const [byEmail, setByEmail] = useState(true);
-  const [showDetails, setShowDetails] = useState(true);
+  const [showDetails, setShowDetails] = useState(withDetails);
   const [details, setDetails] = useState<Client | null>(null);
   const load = useCallback(
     (before?: string) => listClientMessagesAction(client._id, { before }),
@@ -438,14 +442,16 @@ const Thread = ({
       }
       header={
         <div className="flex items-center gap-3 border-b border-[#eceef1] bg-white px-4 py-3 sm:px-5">
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to conversations"
-            className="grid size-8 cursor-pointer place-items-center rounded-lg text-[#4b5563] hover:bg-[#f3f4f6] md:hidden"
-          >
-            <ArrowLeft size={17} />
-          </button>
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              aria-label="Back to conversations"
+              className="grid size-8 cursor-pointer place-items-center rounded-lg text-[#4b5563] hover:bg-[#f3f4f6] md:hidden"
+            >
+              <ArrowLeft size={17} />
+            </button>
+          ) : null}
           <Avatar id={client._id} name={client.companyName} size={42} />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[15px] font-semibold text-[#0b0c24]">

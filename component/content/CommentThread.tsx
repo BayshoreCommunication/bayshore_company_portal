@@ -5,8 +5,9 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { Download, FileText, Loader2, Paperclip, Play, Send, X } from "lucide-react";
 import type { ContentComment, ContentFile, ContentPiece } from "@/app/actions/content";
-import { formatDateTime, mediaOf, personNameOf, threadOf, uploadProblem } from "./contentUi";
+import { formatDateTime, mediaOf, personNameOf, threadOf, uploadProblem, alertTooBigVideos } from "./contentUi";
 import { Lightbox, MEDIA_ICON, extensionOf, fileSize, type Upload } from "./contentForm";
+import { uploadFailureMessage } from "./upload";
 
 // The backend's CONTENT_COMMENT_MAX_ATTACHMENTS.
 const MAX_ATTACHMENTS = 5;
@@ -29,7 +30,7 @@ export const postComment = (contentId: string, form: FormData, onProgress: (perc
     request.onload = () =>
       resolve({
         status: request.status,
-        body: (request.response as CommentResponse | null) ?? { success: false, message: "The server sent an unexpected response." },
+        body: (request.response as CommentResponse | null) ?? { success: false, message: uploadFailureMessage(request.status) },
       });
     request.onerror = () => reject(new Error("Network error"));
     request.send(form);
@@ -172,6 +173,8 @@ const CommentThread = ({
     entry.name ?? personNameOf(entry.user) ?? (entry.author === "client" ? clientName : "BayShore");
 
   const addFiles = (files: File[]) => {
+    // A video over 200MB: said out loud, not only on the piece.
+    alertTooBigVideos(files, toast.error);
     const problems = files.map(uploadProblem).filter(Boolean);
     const allowed = files.filter((file) => !uploadProblem(file));
     const room = MAX_ATTACHMENTS - picked.length;

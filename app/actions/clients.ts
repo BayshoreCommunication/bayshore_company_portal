@@ -180,6 +180,8 @@ export interface CreatedClient {
   client: Client;
   // The login account created together with the client — none, when no password was given.
   user: (ClientLogin & { role: "client"; client: string }) | null;
+  // Whether the welcome email — with their sign-in email and password — went out.
+  welcomeEmailed?: boolean;
 }
 
 interface ClientActionResult<T> {
@@ -317,9 +319,9 @@ export async function listStaffAction(): Promise<StaffOption[]> {
   }
 }
 
-// Without a password the client is made with no portal login.
+// Every new client gets a portal login: the password is required, and goes to them by email.
 export async function createClientAction(
-  input: ClientInput & { password?: string },
+  input: ClientInput & { password: string },
 ): Promise<ClientActionResult<CreatedClient>> {
   const accessToken = await token();
   if (!accessToken) return { ok: false, error: "Not authenticated." };
@@ -414,4 +416,16 @@ export async function deleteClientAction(id: string): Promise<ClientActionResult
   } catch {
     return { ok: false, error: "Network error. Please try again." };
   }
+}
+
+// The clients to pick from on an "add" page, with the one its link names (?client=) always among
+// them — the list is cut at 100, newest first, so an older client is fetched on its own.
+export async function clientOptionsWith(pickedId?: string): Promise<{ ok: boolean; error?: string; clients: Client[] }> {
+  const list = await listClientsAction({ limit: 100 });
+  const clients = list.data?.clients ?? [];
+  if (list.ok && pickedId && /^[0-9a-f]{24}$/i.test(pickedId) && !clients.some((client) => client._id === pickedId)) {
+    const picked = await getClientAction(pickedId);
+    if (picked.ok && picked.data) clients.unshift(picked.data);
+  }
+  return { ok: list.ok, error: list.error, clients };
 }

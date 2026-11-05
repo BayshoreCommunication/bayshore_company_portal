@@ -45,7 +45,9 @@ export const MEDIA_MAX_BYTES: Record<Media, number> = {
 // pieces can be saved together: a longer list simply goes up over several requests.
 export const MAX_PIECES_PER_REQUEST = 10;
 export const MAX_FILES_PER_REQUEST = 40;
-export const MAX_BYTES_PER_REQUEST = 500 * 1024 * 1024;
+// Under the API's own limit on one request (nginx: client_max_body_size, backend/deploy/nginx.conf),
+// with room for a video's thumbnail and the form around the files.
+export const MAX_BYTES_PER_REQUEST = 180 * 1024 * 1024;
 
 // The exact file types the backend stores (models/content.model.ts) — the file
 // picker's "image/*" would otherwise let through HEIC, SVG and the like.
@@ -63,10 +65,28 @@ const UPLOADABLE_MIME_TYPES: Record<Media, string[]> = {
   ],
 };
 
+// A video too big to upload: it is shared as a link instead.
+export const isTooBigVideo = (file: File) => mediaOf(file) === "video" && file.size > MEDIA_MAX_BYTES.video;
+
+// The alert shown when one is picked, as well as the note on the piece.
+export const alertTooBigVideos = (files: File[], alert: (message: string, options?: { id?: string; duration?: number }) => unknown) => {
+  const tooBig = files.filter(isTooBigVideo);
+  if (!tooBig.length) return;
+  alert(
+    tooBig.length === 1
+      ? `"${tooBig[0].name}" is over 200MB. Videos bigger than 200MB can't be uploaded — upload it to YouTube or Google Drive and paste the link instead.`
+      : `${tooBig.length} videos are over 200MB. Videos bigger than 200MB can't be uploaded — upload them to YouTube or Google Drive and paste the links instead.`,
+    { id: "video-too-big", duration: 8000 },
+  );
+};
+
 // Why a file can't be uploaded, or null when it's fine.
 export const uploadProblem = (file: File): string | null => {
   const media = mediaOf(file);
   if (!UPLOADABLE_MIME_TYPES[media].includes(file.type)) return `"${file.name}" isn't a supported file type`;
+  // A video bigger than this isn't uploaded at all: it is shared as a link instead.
+  if (media === "video" && file.size > MEDIA_MAX_BYTES.video)
+    return `"${file.name}" is over 200MB, so it can't be uploaded. Put it on YouTube, Google Drive or Dropbox and paste the link instead`;
   if (file.size > MEDIA_MAX_BYTES[media])
     return `"${file.name}" is over the ${MEDIA_MAX_BYTES[media] / (1024 * 1024)}MB limit for ${media}s`;
   return null;
@@ -132,7 +152,7 @@ export const CONTENT_KINDS: Record<ContentKind, KindSpec> = {
     background: "#fbdada",
     media: ["video"],
     minFiles: 1,
-    linkPlaceholder: "…or paste a video link (YouTube, Google Drive)",
+    linkPlaceholder: "…or paste a video link (YouTube, Google Drive) — needed for videos over 200MB",
     captionLabel: "Caption",
     captionPlaceholder: "Write the video caption...",
     fields: [],
@@ -214,7 +234,7 @@ const ACCEPT: Record<Media, string> = {
 
 const MEDIA_HINT: Record<Media, string> = {
   image: "PNG, JPG or WebP",
-  video: "MP4 or MOV",
+  video: "MP4 or MOV up to 200MB (bigger: paste a link)",
   doc: "Word, PDF or text",
 };
 

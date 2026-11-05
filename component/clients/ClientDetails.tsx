@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRealtime } from "@/lib/realtime";
 import { PasswordEye } from "@/component/shared/PasswordModal";
+import { Thread as ClientThread } from "@/component/messages/Messages";
 import toast from "react-hot-toast";
 import {
   AlertTriangle,
@@ -1235,6 +1236,13 @@ const StatusPicker = ({ clientId, name, status }: { clientId: string; name: stri
 };
 
 const TABS = ["Overview", "Reports", "Content", "Meetings", "Messages", "Payments"];
+// Where a tab's things are, for this client, until they show on the page itself.
+const TAB_LINKS: Record<string, (clientId: string) => string> = {
+  Reports: (clientId) => `/monthly-reports?client=${clientId}`,
+  Content: (clientId) => `/content?client=${clientId}`,
+  Meetings: () => "/calendar",
+  Payments: () => "/payments",
+};
 
 const LOGIN_STATUS_LABEL: Record<ClientLogin["status"], string> = {
   pending: "Pending",
@@ -1319,9 +1327,9 @@ const ClientDetails = ({
 
         <div className="flex min-w-0 flex-col gap-3 xl:items-end">
           <div className="flex flex-wrap gap-2 xl:justify-end">
-            <button className={headerAction} type="button">
+            <Link href={`/messages?client=${client._id}`} className={headerAction}>
               <MessageSquare size={13} strokeWidth={2} /> Message
-            </button>
+            </Link>
             {canManage ? (
               <Link href={`/clients/${client._id}/edit`} className={headerAction}>
                 <Pencil size={13} strokeWidth={2} /> Edit Client
@@ -1356,10 +1364,24 @@ const ClientDetails = ({
         ))}
       </div>
 
-      {activeTab !== "Overview" ? (
+      {activeTab === "Messages" ? (
+        // The conversation with this client, here on their page — the same one as on Messages.
+        <section className="flex h-[calc(100dvh-260px)] min-h-120 overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-[0_4px_16px_rgba(15,23,42,0.035)]">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <ClientThread client={{ _id: client._id, companyName: client.companyName, contactName: client.contactName }} initial={null} withDetails={false} />
+          </div>
+        </section>
+      ) : activeTab !== "Overview" ? (
         <div className={sectionCard}>
-          <div className="px-5 py-12 text-center text-[13px] text-[#657787]">
-            <b>{activeTab}</b> for this client will appear here once that module is connected.
+          <div className="flex flex-col items-center gap-3 px-5 py-10 text-center text-[13px] text-[#657787]">
+            <span>
+              <b>{activeTab}</b> for {client.companyName} are on their own page for now.
+            </span>
+            {TAB_LINKS[activeTab] ? (
+              <Link href={TAB_LINKS[activeTab](client._id)} className={headerAction}>
+                Open {client.companyName}&apos;s {activeTab.toLowerCase()} <ArrowRight size={13} />
+              </Link>
+            ) : null}
           </div>
         </div>
       ) : (

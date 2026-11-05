@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { listClientsAction } from "@/app/actions/clients";
+import { clientOptionsWith } from "@/app/actions/clients";
 import AddContent from "@/component/content/AddContent";
 import { canDeleteContent, canWriteContent } from "@/component/content/contentUi";
 import { breadcrumbRow, breadcrumbs, formErrorBanner } from "@/component/shared/ui";
@@ -10,7 +10,10 @@ const first = (value: string | string[] | undefined) => (Array.isArray(value) ? 
 
 // ?client=<id> opens the page with that client already picked (from the Content list).
 const AddContentPage = async ({ searchParams }: { searchParams: SearchParams }) => {
-  const [params, session, clients] = await Promise.all([searchParams, auth(), listClientsAction({ limit: 100 })]);
+  const params = await searchParams;
+  // The client the link names is always among those to pick (an older one too).
+  const [session, found] = await Promise.all([auth(), clientOptionsWith(first(params.client))]);
+  const clients = { ok: found.ok, error: found.error, data: { clients: found.clients } };
 
   const problem = !canWriteContent(session?.user?.role)
     ? "Your role can view content but not add it."
