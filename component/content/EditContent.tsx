@@ -39,8 +39,7 @@ import {
 } from "@/component/shared/ui";
 import CommentThread from "./CommentThread";
 import GroupPieces from "./GroupPieces";
-import { extendPiece, sliceFiles, uploadFailureMessage } from "./upload";
-import { keepSessionAction } from "@/app/actions/auth";
+import { extendPiece, patchPiece, sliceFiles } from "./upload";
 import {
   BATCH_OPTIONS,
   type Batch,
@@ -71,7 +70,7 @@ import {
   uploadProblem,
 } from "./contentUi";
 
-// What a save sends back from the upload route (PATCH /api/content/:id).
+// What a save sends back (PATCH /content/:id).
 type SaveResponse = { success: boolean; message: string; data?: ContentItem; errors?: string[] };
 
 // What the status means for whoever is editing, shown above the form.
@@ -109,23 +108,8 @@ const draftOf = (item: ContentItem): Draft => ({
 
 const dayOf = (iso?: string) => (iso ? iso.slice(0, 10) : "");
 
-// Sends the form to the upload route, reporting progress (0–100) as new files go up.
-const uploadChanges = (id: string, form: FormData, onProgress: (percent: number) => void) =>
-  new Promise<{ status: number; body: SaveResponse }>((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("PATCH", `/api/content/${id}`);
-    request.responseType = "json";
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    request.onload = () =>
-      resolve({
-        status: request.status,
-        body: (request.response as SaveResponse | null) ?? { success: false, message: uploadFailureMessage(request.status) },
-      });
-    request.onerror = () => reject(new Error("Network error"));
-    request.send(form);
-  });
+// Sends the form straight to the backend (PATCH /content/:id), reporting progress (0–100).
+const uploadChanges = (id: string, form: FormData, onProgress: (percent: number) => void) => patchPiece<SaveResponse>(id, form, onProgress);
 
 const SideRow = ({ icon: Icon, label, children }: { icon: typeof Clock; label: string; children: ReactNode }) => (
   <div className="flex items-start gap-2.5 py-2">
@@ -334,8 +318,6 @@ const EditContent = ({ item, canReview }: { item: ContentItem; canReview: boolea
 
     setSavingAs(andSend ? "send" : thenNext ? "next" : "save");
     setUploadProgress(0);
-    // A form kept open a long while: the session is renewed before the files go up.
-    await keepSessionAction().catch(() => undefined);
     try {
       if (dirty) {
         const { status, body } = await uploadChanges(item._id, form, (percent) => showProgress(headBytes, percent));

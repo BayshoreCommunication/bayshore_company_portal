@@ -4,6 +4,8 @@ import { useRef, useState, useSyncExternalStore, useTransition, type DragEvent, 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { sendToBackend } from "@/lib/sendToBackend";
+import { uploadFailureMessage } from "@/component/content/upload";
 import { ArrowLeft, Eye, Flag, FolderKanban, Loader2, Paperclip, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import {
   createProjectAction,
@@ -46,16 +48,15 @@ const star = <span className="text-[#dc2626]">*</span>;
 type ClientOption = { _id: string; companyName: string };
 type Outcome = { ok: boolean; error?: string; fieldErrors?: string[] };
 
-// New files travel as a multipart form through the /api/projects route handlers —
-// a server action caps the request at 1MB, far below one 25MB attachment.
-const sendWithFiles = async (url: string, method: "POST" | "PATCH", form: FormData): Promise<Outcome> => {
+// New files go straight to the backend as a multipart form (lib/sendToBackend.ts) — a server
+// action caps the request at 1MB, and the host this app runs on at 4.5MB.
+const sendWithFiles = async (path: string, method: "POST" | "PATCH", form: FormData, refresh: string[]): Promise<Outcome> => {
   try {
-    const response = await fetch(url, { method, body: form });
-    const body = await response.json().catch(() => null);
-    if (response.ok) return { ok: true };
+    const { status, body } = await sendToBackend<{ message?: unknown; errors?: unknown }>(method, path, form, { refresh });
+    if (status >= 200 && status < 300) return { ok: true };
     return {
       ok: false,
-      error: typeof body?.message === "string" ? body.message : "Something went wrong.",
+      error: typeof body?.message === "string" ? body.message : uploadFailureMessage(status),
       fieldErrors: Array.isArray(body?.errors) ? body.errors : undefined,
     };
   } catch {
@@ -268,8 +269,8 @@ const ProjectForm = ({
       for (const url of removedUrls) form.append("removeFiles", url);
       for (const file of newFiles) form.append("files", file);
       outcome = project
-        ? await sendWithFiles(`/api/projects/${project._id}`, "PATCH", form)
-        : await sendWithFiles("/api/projects", "POST", form);
+        ? await sendWithFiles(`/projects/${project._id}`, "PATCH", form, ["/projects", `/projects/${project._id}/edit`])
+        : await sendWithFiles("/projects", "POST", form, ["/projects"]);
     } else {
       outcome = project
         ? await updateProjectAction(project._id, { ...fields, removeFiles: removedUrls })
@@ -286,7 +287,7 @@ const ProjectForm = ({
 
     toast.success(project ? "Project updated successfully" : "Project created successfully");
     router.push("/projects");
-    // The route handler's upload isn't a navigation, so ask for the fresh list.
+    // The upload isn't a navigation, so ask for the fresh list.
     router.refresh();
   };
 

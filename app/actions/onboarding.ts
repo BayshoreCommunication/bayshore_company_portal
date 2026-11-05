@@ -238,7 +238,7 @@ export async function getOnboardingRequestAction(id: string): Promise<Onboarding
 // What the client wrote on a step of their onboarding form, and the team's replies (backend:
 // models/onboardingComment.model.ts). `step` is the step's id on the client's form ("domain");
 // this portal's steps carry it as "step:domain". Comments and replies carry files, so they go
-// through the upload routes (app/api/onboarding/comments/[clientId]/…).
+// from the browser straight to the backend (lib/sendToBackend.ts).
 export interface OnboardingCommentFile {
   url: string;
   name: string;

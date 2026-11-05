@@ -3,6 +3,8 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { sendToBackend } from "@/lib/sendToBackend";
+import { uploadFailureMessage } from "@/component/content/upload";
 import {
   ArrowLeft,
   Trash2,
@@ -258,10 +260,9 @@ export const FileManager = ({
     const form = new FormData();
     Array.from(picked).forEach((file) => form.append("files", file));
     try {
-      const response = await fetch(`/api/onboarding/media/${clientId}/${kind}`, { method: "POST", body: form });
-      const body = await response.json().catch(() => null);
-      if (!response.ok || !body?.data) return void toast.error(body?.message || "Couldn't upload the files.");
-      onChange(kind, body.data.files as OnboardingFile[]);
+      const { status, body } = await sendToBackend<{ message?: string; data?: { files: OnboardingFile[] } }>("POST", `/onboarding/clients/${clientId}/media/${kind}`, form);
+      if (status < 200 || status >= 300 || !body?.data) return void toast.error(body?.message || uploadFailureMessage(status));
+      onChange(kind, body.data.files);
       toast.success(picked.length === 1 ? "File uploaded" : "Files uploaded");
     } catch {
       toast.error("Couldn't reach the server. Please try again.");

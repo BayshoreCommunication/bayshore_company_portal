@@ -121,7 +121,7 @@ const OnboardingComments = ({
     form.append("text", draft.trim());
     files.forEach((file) => form.append("files", file));
     try {
-      const { ok, body } = await sendWithProgress(`/api/onboarding/comments/${clientId}`, form, () => undefined);
+      const { ok, body } = await sendWithProgress(`/onboarding/clients/${clientId}/comments`, form, () => undefined);
       if (!ok || !body?.data) {
         setError(body?.message || "Couldn't post the comment. Please try again.");
         return;

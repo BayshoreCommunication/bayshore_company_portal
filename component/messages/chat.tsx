@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import Link from "next/link";
+import { sendToBackend } from "@/lib/sendToBackend";
 import {
   BarChart3,
   CalendarDays,
@@ -228,7 +229,7 @@ const FileOut = ({ file, mine }: { file: ChatFile; mine: boolean }) => {
       download={file.name}
       target="_blank"
       rel="noopener noreferrer"
-      className={`flex max-w-72 items-center gap-2.5 rounded-xl px-3 py-2 no-underline ${mine ? "bg-white/10 text-white hover:bg-white/15" : "bg-[#f3f4f6] text-[#1f2530] hover:bg-[#eceef1]"}`}
+      className={`flex max-w-72 items-center gap-2.5 rounded-xl px-3 py-2 no-underline ${mine ? "bg-[#0b1522] text-white hover:bg-[#1c2836]" : "border border-[#e6e8eb] bg-white text-[#1f2530] hover:bg-[#f7f8fa]"}`}
     >
       <FileText size={16} strokeWidth={2} className="shrink-0 opacity-80" />
       <span className="min-w-0 flex-1">
@@ -481,34 +482,12 @@ export const MessageList = ({
 
 // ── Loading and sending ──────────────────────────────────────────────────────
 
-// Posts a message (words, files, what it is about) to this portal's upload route, reporting
-// how far the files have gone up. XMLHttpRequest, because fetch can't report upload progress.
-const post = (
-  url: string,
-  form: FormData,
-  onProgress: (percent: number) => void,
-) =>
-  new Promise<{
-    status: number;
-    body: { success?: boolean; message?: string; data?: ChatMessage };
-  }>((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("POST", url);
-    request.responseType = "json";
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable)
-        onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    request.onload = () =>
-      resolve({
-        status: request.status,
-        body: request.response ?? {
-          message: "The server sent an unexpected response.",
-        },
-      });
-    request.onerror = () => reject(new Error("Network error"));
-    request.send(form);
-  });
+// Posts a message (words, files, what it is about) straight to the backend (`path`, e.g.
+// "/messages/me"), reporting how far the files have gone up.
+const post = async (path: string, form: FormData, onProgress: (percent: number) => void) => {
+  const { status, body } = await sendToBackend<{ success?: boolean; message?: string; data?: ChatMessage }>("POST", path, form, { onProgress });
+  return { status, body: body ?? { message: "The server sent an unexpected response." } };
+};
 
 const merge = (current: ChatMessage[], incoming: ChatMessage[]) => {
   const byId = new Map(current.map((message) => [message._id, message]));
@@ -524,7 +503,7 @@ export const useThread = ({
   initial,
   load,
   matches,
-  postUrl,
+  postPath,
   extra,
   onIncoming,
 }: {
@@ -533,7 +512,8 @@ export const useThread = ({
   load: (before?: string) => Promise<MessagePage | null>;
   // Whether a live message belongs here.
   matches: (message: ChatMessage) => boolean;
-  postUrl: string;
+  // Where it is sent on the backend: "/messages/me", "/messages/<client id>".
+  postPath: string;
   // Sent with every message: what it is about ({ report: id }).
   extra?: Record<string, string>;
   // The other side wrote while this was open.
@@ -610,7 +590,7 @@ export const useThread = ({
       form.append(key, value);
     for (const file of files) form.append("files", file);
     try {
-      const { status, body } = await post(postUrl, form, onProgress);
+      const { status, body } = await post(postPath, form, onProgress);
       if (status >= 300 || !body.data)
         return body.message ?? "Couldn't send your message. Please try again.";
       take([body.data]);

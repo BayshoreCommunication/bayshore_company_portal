@@ -1,4 +1,5 @@
 import { MAX_BYTES_PER_REQUEST, MAX_FILES_PER_REQUEST } from "./contentUi";
+import { sendToBackend } from "@/lib/sendToBackend";
 
 // Sending a piece's files to the backend. One request carries a limited number of files and
 // bytes, so a long list goes up in turns — however many files a piece has.
@@ -31,25 +32,23 @@ export const sliceFiles = <T extends { size: number }>(files: T[]): T[][] => {
   return lots;
 };
 
-// Sends a change to one piece through the upload route (PATCH /content/:id), reporting
-// progress (0–100) as the files go up. XMLHttpRequest rather than fetch, because fetch
-// can't report upload progress.
+// Sends a piece's form straight to the backend (lib/sendToBackend.ts), reporting progress
+// (0–100) as the files go up. When the answer isn't the API's (a proxy stopped it on the way),
+// says what most likely happened.
+export const sendContent = async <Body extends UploadResponse = UploadResponse>(
+  method: "POST" | "PATCH",
+  path: string,
+  form: FormData,
+  onProgress: (percent: number) => void,
+  refresh: string[],
+) => {
+  const { status, body } = await sendToBackend<Body>(method, path, form, { onProgress, refresh });
+  return { status, body: body ?? ({ success: false, message: uploadFailureMessage(status) } as Body) };
+};
+
+// Sends a change to one piece (PATCH /content/:id).
 export const patchPiece = <Body extends UploadResponse = UploadResponse>(id: string, form: FormData, onProgress: (percent: number) => void) =>
-  new Promise<{ status: number; body: Body }>((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("PATCH", `/api/content/${id}`);
-    request.responseType = "json";
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    request.onload = () =>
-      resolve({
-        status: request.status,
-        body: (request.response as Body | null) ?? ({ success: false, message: uploadFailureMessage(request.status) } as Body),
-      });
-    request.onerror = () => reject(new Error("Network error"));
-    request.send(form);
-  });
+  sendContent<Body>("PATCH", `/content/${id}`, form, onProgress, ["/content", `/content/${id}`]);
 
 // Adds more files to a piece whose first lot is already saved: they join that upload — the
 // same version, right after its files. `onSent` hears how many bytes each lot was as it

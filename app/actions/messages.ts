@@ -4,8 +4,8 @@ import { auth } from "@/auth";
 import { BACKEND_API_URL } from "@/lib/backend";
 import type { ChatMessage, MessagePage } from "@/component/messages/chat";
 
-// The clients' conversations with the team (backend: /messages). Sending goes through the upload
-// route (app/api/messages/[clientId]/route.ts), since a message can carry files.
+// The clients' conversations with the team (backend: /messages). Sending goes from the browser
+// straight to the backend (lib/sendToBackend.ts), since a message can carry files.
 
 const token = async () => (await auth())?.accessToken;
 

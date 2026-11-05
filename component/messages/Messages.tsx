@@ -372,7 +372,7 @@ export const Thread = ({
     initial,
     load,
     matches: (message) => message.client === client._id,
-    postUrl: `/api/messages/${client._id}`,
+    postPath: `/messages/${client._id}`,
     // The backend sends no email anyway when the client's are off or there is no login to send to.
     extra: { email: String(byEmail) },
     onIncoming: (message) => {

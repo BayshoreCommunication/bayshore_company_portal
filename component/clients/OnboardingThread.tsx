@@ -80,7 +80,7 @@ const ReplyBox = ({ clientId, comment, onSent, onCancel }: { clientId: string; c
     form.append("text", draft.trim());
     files.forEach((file) => form.append("files", file));
     try {
-      const { ok, body } = await sendWithProgress(`/api/onboarding/comments/${clientId}/${comment._id}`, form, () => undefined);
+      const { ok, body } = await sendWithProgress(`/onboarding/clients/${clientId}/comments/${comment._id}/replies`, form, () => undefined);
       if (!ok || !body?.data) {
         setError(body?.message || "Couldn't send the reply. Please try again.");
         return;

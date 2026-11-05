@@ -176,7 +176,7 @@ export interface ContentListData {
   };
 }
 
-// What POST /api/content/batch (the upload route) answers with.
+// What POST /content/batch answers with (sent from the browser: lib/sendToBackend.ts).
 export interface ContentBatchResponse {
   success: boolean;
   message: string;
@@ -294,12 +294,11 @@ export async function getContentAction(id: string): Promise<ContentActionResult<
   }
 }
 
-// Creating pieces — which carries files — goes through the upload route
-// (app/api/content/batch/route.ts), not a server action: server actions cap request
-// bodies at 1MB, and the upload route streams straight to the backend instead.
+// Creating pieces — which carries files — goes from the browser straight to the backend
+// (lib/sendToBackend.ts), not through a server action: server actions cap request bodies at 1MB.
 
-// Details only (title, caption, fields, removeFiles…). New files go through the
-// upload route for the same reason as above.
+// Details only (title, caption, fields, removeFiles…). New files go straight to
+// the backend for the same reason as above.
 export async function updateContentAction(
   id: string,
   formData: FormData,

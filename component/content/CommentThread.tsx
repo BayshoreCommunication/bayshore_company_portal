@@ -7,7 +7,7 @@ import { Download, FileText, Loader2, Paperclip, Play, Send, X } from "lucide-re
 import type { ContentComment, ContentFile, ContentPiece } from "@/app/actions/content";
 import { formatDateTime, mediaOf, personNameOf, threadOf, uploadProblem, alertTooBigVideos } from "./contentUi";
 import { Lightbox, MEDIA_ICON, extensionOf, fileSize, type Upload } from "./contentForm";
-import { uploadFailureMessage } from "./upload";
+import { sendContent } from "./upload";
 
 // The backend's CONTENT_COMMENT_MAX_ATTACHMENTS.
 const MAX_ATTACHMENTS = 5;
@@ -18,23 +18,9 @@ type CommentResponse = { success: boolean; message: string; data?: { comments: C
 
 const toUpload = (file: ContentFile): Upload => ({ name: file.name, size: file.size, url: file.url, media: file.media, mime: file.mimeType });
 
-// Sends the comment to the upload route, reporting progress (0–100) as files go up.
+// Sends the comment straight to the backend (POST /content/:id/comments), reporting progress (0–100).
 export const postComment = (contentId: string, form: FormData, onProgress: (percent: number) => void) =>
-  new Promise<{ status: number; body: CommentResponse }>((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("POST", `/api/content/${contentId}/comments`);
-    request.responseType = "json";
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    request.onload = () =>
-      resolve({
-        status: request.status,
-        body: (request.response as CommentResponse | null) ?? { success: false, message: uploadFailureMessage(request.status) },
-      });
-    request.onerror = () => reject(new Error("Network error"));
-    request.send(form);
-  });
+  sendContent<CommentResponse>("POST", `/content/${contentId}/comments`, form, onProgress, [`/content/${contentId}`]);
 
 // A comment's files: images and videos as small tiles, documents as chips. Any of
 // them opens full size. `end` lines them up on the right, under the team's own messages.

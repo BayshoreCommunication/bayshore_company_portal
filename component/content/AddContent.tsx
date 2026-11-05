@@ -42,8 +42,7 @@ import {
   sectionCard,
   textareaBase,
 } from "@/component/shared/ui";
-import { extendPiece, sliceFiles, uploadFailureMessage } from "./upload";
-import { keepSessionAction } from "@/app/actions/auth";
+import { extendPiece, sendContent, sliceFiles } from "./upload";
 import {
   BATCH_OPTIONS,
   type Batch,
@@ -643,24 +642,9 @@ const loadBatch = async (params: { client: string; batchMonth: string; batchType
   return { ...first, data: { ...first.data, items } };
 };
 
-// Sends the form to the upload route, reporting progress (0–100) as the files go up.
-// XMLHttpRequest rather than fetch, because fetch can't report upload progress.
+// Sends the form straight to the backend (POST /content/batch), reporting progress (0–100).
 const uploadBatch = (form: FormData, onProgress: (percent: number) => void) =>
-  new Promise<{ status: number; body: ContentBatchResponse }>((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("POST", "/api/content/batch");
-    request.responseType = "json";
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    request.onload = () =>
-      resolve({
-        status: request.status,
-        body: (request.response as ContentBatchResponse | null) ?? { success: false, message: uploadFailureMessage(request.status) },
-      });
-    request.onerror = () => reject(new Error("Network error"));
-    request.send(form);
-  });
+  sendContent<ContentBatchResponse>("POST", "/content/batch", form, onProgress, ["/content"]);
 
 // A piece as it goes up: its first lot of files with the piece itself (`head`), and the rest
 // after it, lot by lot. One already stored (a save that stopped part-way) has only files left.
@@ -835,7 +819,7 @@ const AddContent = ({
   const unfinished = useRef<{ key: string; group: string } | null>(null);
 
   // Save every piece in the form at once — as drafts, or sent straight to the client —
-  // or point at what's missing. Files go up through the upload route with progress.
+  // or point at what's missing. Files go straight to the backend with progress.
   const addToBatch = async (status: "draft" | "pending_approval") => {
     setError(null);
     if (!client) return setError("Select a client first.");
@@ -924,8 +908,6 @@ const AddContent = ({
 
     setSavingAs(status);
     setUploadProgress(0);
-    // A form kept open a long while: the session is renewed before the files go up.
-    await keepSessionAction().catch(() => undefined);
     try {
       // Pieces an earlier save left half-way come first.
       for (const part of parts) {

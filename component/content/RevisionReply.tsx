@@ -7,7 +7,7 @@ import { changeContentStatusAction, type ContentFile, type ContentItem, type Con
 import { btnDraft, btnPrimary } from "@/component/shared/ui";
 import { postComment } from "./CommentThread";
 import { MEDIA_ICON, ThumbnailField, toThumbnail, type Upload } from "./contentForm";
-import { extendPiece, sliceFiles, uploadFailureMessage } from "./upload";
+import { extendPiece, patchPiece, sliceFiles } from "./upload";
 import { CONTENT_KINDS, filesOf, mediaOf, uploadHint, uploadProblem, alertTooBigVideos } from "./contentUi";
 
 // The backend's limits (models/content.model.ts, validators/content.validator.ts).
@@ -31,23 +31,8 @@ const fieldClass =
   "block w-full rounded-md border border-[#cbd6d0] bg-white px-3 py-2.5 text-[12.5px] leading-normal text-[#17242f] outline-none wrap-anywhere placeholder:text-[#9aacb8] focus:border-[#2563eb]";
 const labelClass = "mb-1.5 flex items-baseline justify-between gap-2 text-[12px] font-bold text-[#17242f]";
 
-// Sends the piece's changes to the upload route, reporting progress (0–100) as new files go up.
-const savePiece = (id: string, form: FormData, onProgress: (percent: number) => void) =>
-  new Promise<{ status: number; body: SaveResponse }>((resolve, reject) => {
-    const request = new XMLHttpRequest();
-    request.open("PATCH", `/api/content/${id}`);
-    request.responseType = "json";
-    request.upload.onprogress = (event) => {
-      if (event.lengthComputable) onProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    request.onload = () =>
-      resolve({
-        status: request.status,
-        body: (request.response as SaveResponse | null) ?? { success: false, message: uploadFailureMessage(request.status) },
-      });
-    request.onerror = () => reject(new Error("Network error"));
-    request.send(form);
-  });
+// Sends the piece's changes straight to the backend (PATCH /content/:id), reporting progress (0–100).
+const savePiece = (id: string, form: FormData, onProgress: (percent: number) => void) => patchPiece<SaveResponse>(id, form, onProgress);
 
 // A file on the piece — one it already has, or one just picked — as a small tile.
 const FileTile = ({ media, url, name, children }: { media: ContentFile["media"]; url: string; name: string; children: ReactNode }) => {
