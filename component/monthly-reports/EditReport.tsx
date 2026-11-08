@@ -11,11 +11,15 @@ const EditReport = ({ report, role, userName }: { report: Report; role: string; 
   const clientId = typeof report.client === "string" ? report.client : report.client?._id;
 
   return (
-    <div className="flex flex-col gap-5">
-      <ReportForm clients={[]} report={report} role={role} userName={userName} readOnly={readOnly} />
-      {/* What the client asked or said about it, and the team's replies. */}
-      {clientId ? <ReportComments reportId={report._id} clientId={clientId} published={report.status === "published"} /> : null}
-    </div>
+    <ReportForm
+      clients={[]}
+      report={report}
+      role={role}
+      userName={userName}
+      readOnly={readOnly}
+      // What the client asked or said about it, and the team's replies — under the form, in its column.
+      below={clientId ? <ReportComments reportId={report._id} clientId={clientId} published={report.status === "published"} /> : null}
+    />
   );
 };
 

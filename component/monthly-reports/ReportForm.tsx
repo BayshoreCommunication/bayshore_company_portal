@@ -22,7 +22,6 @@ import {
   formErrorBannerBase,
   headlineRow,
   inputText,
-  layoutGrid,
   moreBtn,
   pageTitle,
   roleAlertBanner,
@@ -337,7 +336,7 @@ const SectionCard = ({
         className={`shrink-0 transition-transform duration-150 ease-[ease] ${included ? "" : "-rotate-90"}`}
       />
     </div>
-    {included ? <div className="px-5 pb-5">{children}</div> : null}
+    {included ? <div className="overflow-x-auto px-5 pb-5">{children}</div> : null}
   </div>
 );
 
@@ -403,6 +402,7 @@ const ReportForm = ({
   userName,
   readOnly,
   initialClientId = "",
+  below,
 }: {
   clients: { _id: string; companyName: string }[];
   report?: Report;
@@ -410,6 +410,8 @@ const ReportForm = ({
   userName: string;
   readOnly: boolean;
   initialClientId?: string;
+  // Under the form, in its own column: the report's comments.
+  below?: ReactNode;
 }) => {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -598,7 +600,7 @@ const ReportForm = ({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-4 rounded-lg border border-[#dbe3de] bg-white">
+      <div className="grid grid-cols-2 rounded-lg border border-[#dbe3de] bg-white lg:grid-cols-4">
         <div className={metaCol}>
           <div className={metaLbl}>Client</div>
           {isEdit ? (
@@ -655,8 +657,8 @@ const ReportForm = ({
         </div>
       </div>
 
-      <div className={layoutGrid}>
-        <div className={contentStack}>
+      <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[2fr_1fr]">
+        <div className={`${contentStack} min-w-0`}>
           <div className="rounded-lg border border-[#dbe3de] bg-white p-5">
             <div className={sectionTitle}>Executive Summary</div>
             <div className={sectionSub}>The written overview the client reads first. Separate paragraphs with a blank line.</div>
@@ -863,9 +865,24 @@ const ReportForm = ({
             </table>
             {values.locations.length < MAX_ROWS ? <AddRowButton disabled={readOnly} onClick={() => patch({ locations: [...values.locations, emptyLocation()] })} /> : null}
           </SectionCard>
+
+          <div className="flex flex-wrap items-center justify-end gap-2.5 rounded-lg border border-[#dbe3de] bg-white px-5 py-3">
+            <div className="flex items-center gap-1.5 text-[12px] text-[#64748b]">
+              {report ? `Last saved ${formatDateTime(report.updatedAt)}` : "Not yet saved"}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2.5">
+              <Link href="/monthly-reports" className={btnDraft}>
+                Back to All Reports
+              </Link>
+              {actionButtons}
+            </div>
+          </div>
+
+          {below}
         </div>
 
-        <div>
+        {/* Stays in sight beside the form as it scrolls. */}
+        <div className="lg:sticky lg:top-5">
           <div className={sideCard}>
             <div className={sideTitle}>Report Status</div>
             <div className="mt-2">
@@ -936,17 +953,6 @@ const ReportForm = ({
         </div>
       </div>
 
-      <div className="flex items-center justify-end gap-2.5 rounded-lg border border-[#dbe3de] bg-white px-5 py-3">
-        <div className="flex items-center gap-1.5 text-[12px] text-[#64748b]">
-          {report ? `Last saved ${formatDateTime(report.updatedAt)}` : "Not yet saved"}
-        </div>
-        <div className="flex gap-2.5">
-          <Link href="/monthly-reports" className={btnDraft}>
-            Back to All Reports
-          </Link>
-          {actionButtons}
-        </div>
-      </div>
     </>
   );
 };

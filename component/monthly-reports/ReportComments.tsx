@@ -21,15 +21,15 @@ const ReportComments = ({ reportId, clientId, published }: { reportId: string; c
   });
 
   return (
-    <section className="rounded-2xl border border-[#e6e8eb] bg-white shadow-[0_2px_6px_rgba(15,23,42,0.05)]" aria-label="Comments">
-      <div className="flex items-center gap-2.5 border-b border-[#eceef1] px-6 py-4">
+    <section className="min-w-0 rounded-2xl border border-[#e6e8eb] bg-white shadow-[0_2px_6px_rgba(15,23,42,0.05)]" aria-label="Comments">
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-[#eceef1] px-4 py-4 sm:px-6">
         <MessageSquare size={17} strokeWidth={2} className="text-[#4b5563]" />
         <div className="text-[15px] font-semibold text-[#0b0c24]">
           Client comments {thread.items.length ? <span className="font-medium text-[#9ca3af]">· {thread.items.length}</span> : null}
         </div>
         <span className="ml-auto text-[11.5px] text-[#9ca3af]">Also in Messages</span>
       </div>
-      <div className="px-6 pb-2">
+      <div className="px-4 pb-2 sm:px-6">
         {!inBrowser || !thread.loaded ? (
           <div className="flex flex-col gap-2 py-4">
             <div className="h-10 w-1/2 animate-pulse rounded-2xl bg-[#eceef1]" />
@@ -52,7 +52,7 @@ const ReportComments = ({ reportId, clientId, published }: { reportId: string; c
         {thread.error ? <p className="py-2 text-[12px] font-medium text-[#b91c1c]">{thread.error}</p> : null}
       </div>
       {published ? (
-        <div className="border-t border-[#eceef1] px-6 py-4">
+        <div className="border-t border-[#eceef1] px-4 py-4 sm:px-6">
           <Composer onSend={thread.send} placeholder="Reply to the client about this report…" />
         </div>
       ) : null}
