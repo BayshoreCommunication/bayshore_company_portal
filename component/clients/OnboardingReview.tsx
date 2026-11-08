@@ -698,10 +698,14 @@ const OnboardingReview = ({
   const saved = useRef({ off, approved });
   const queue = useRef<Promise<void>>(Promise.resolve());
   const [saving, setSaving] = useState(0);
+  // Ticks changed (or saved) here: a reload that set out before one of them would put it back as
+  // it was, so its ticks are left alone.
+  const tickChanges = useRef(0);
 
   const commit = (change: (now: { off: Ticks; approved: Ticks }) => { off?: Ticks; approved?: Ticks }) => {
     const previous = latest.current;
     const next = { ...previous, ...change(previous) };
+    tickChanges.current += 1;
     latest.current = next;
     setOff(next.off);
     setApproved(next.approved);
@@ -723,7 +727,11 @@ const OnboardingReview = ({
         setOff(saved.current.off);
         setApproved(saved.current.approved);
       })
-      .finally(() => setSaving((count) => count - 1));
+      .finally(() => {
+        // Saved (or put back): a reload that set out while it was on its way may predate it.
+        tickChanges.current += 1;
+        setSaving((count) => count - 1);
+      });
   };
 
   const isOn = (step: Step, item: Entry) => step.locked || (!off[step.id] && !off[item.id]);
@@ -772,21 +780,41 @@ const OnboardingReview = ({
 
   // The client's comments, by step, with the team's replies.
   const [comments, setComments] = useState(initialComments);
-  // A comment or reply from either side, live (backend → onboarding:comment) — this client's only.
-  // Where the asks stand on the record: the client answers them from their own form.
-  const reloadAsks = () =>
+  // The client's record as it now stands: their answers and files, the team's ticks and what was
+  // asked again — so every count on the page follows what the client (or someone else on the team)
+  // just did. Ticks still being saved from here are kept, and so are answers while the team is
+  // filling them in.
+  const reloadClient = () => {
+    const changesBefore = tickChanges.current;
     void getClientAction(client._id).then((result) => {
-      if (result.ok && result.data) setUpdateAsked(ticksOf(result.data.onboarding?.updateAsked));
+      if (!result.ok || !result.data) return;
+      const fresh = result.data;
+      setUpdateAsked(ticksOf(fresh.onboarding?.updateAsked));
+      if (tickChanges.current === changesBefore) {
+        const ticks = { off: ticksOf(fresh.onboarding?.notNeeded ?? DEFAULT_NOT_NEEDED), approved: ticksOf(fresh.onboarding?.approved) };
+        latest.current = ticks;
+        saved.current = ticks;
+        setOff(ticks.off);
+        setApproved(ticks.approved);
+      }
+      if (!answering) setClient(fresh);
     });
+  };
+  // A comment or reply from either side, live (backend → onboarding:comment) — this client's only.
   useRealtime<OnboardingComment & { client?: string }>("onboarding:comment", (comment) => {
     if (comment.client && comment.client !== client._id) return;
     setComments((now) => (now.some((entry) => entry._id === comment._id) ? now.map((entry) => (entry._id === comment._id ? comment : entry)) : [...now, comment]));
-    reloadAsks();
+    reloadClient();
+  });
+  // The client saved or handed in their form, added or took off a file — or the team changed
+  // something from elsewhere (backend → onboarding:changed).
+  useRealtime<{ client?: string }>("onboarding:changed", (change) => {
+    if (change.client === client._id) reloadClient();
   });
   // And reloaded now and then, in case the live connection is down.
   useRefreshing(() => {
     void listOnboardingCommentsAction(client._id).then((result) => result.ok && result.data && setComments(result.data));
-    reloadAsks();
+    reloadClient();
   });
   const addComment = (comment: OnboardingComment) => setComments((now) => (now.some((entry) => entry._id === comment._id) ? now : [...now, comment]));
   // The team asked the client to update an item: to do again, and no longer approved (the backend
