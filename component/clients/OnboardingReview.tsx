@@ -20,6 +20,7 @@ import {
   FolderOpen,
   KeyRound,
   Layers,
+  ListPlus,
   MessageCircle,
   Phone,
   ShieldCheck,
@@ -62,12 +63,13 @@ import {
 } from "lucide-react";
 import { getClientAction, updateClientAction, type Client } from "@/app/actions/clients";
 import { PasswordEye } from "@/component/shared/PasswordModal";
-import { addCustomAccountAction, type CustomAccountSection, listOnboardingCommentsAction, removeClientOnboardingFileAction, removeCustomAccountAction, revealOnboardingPasswordAction, updateClientOnboardingAction, type OnboardingAnswers, type OnboardingComment, type OnboardingFile } from "@/app/actions/onboarding";
+import { addCustomAccountAction, type CustomAccountSection, listOnboardingCommentsAction, removeClientOnboardingFileAction, removeCustomAccountAction, removeExtraFileAction, type OnboardingExtraItem, revealOnboardingPasswordAction, updateClientOnboardingAction, type OnboardingAnswers, type OnboardingComment, type OnboardingFile } from "@/app/actions/onboarding";
 import { answersFrom, fieldsOf as editFieldsOf, valueOf, type FieldDef } from "./onboardingFields";
 import { formatFileSize } from "@/component/projects/projectUi";
 import OnboardingComments from "./OnboardingComments";
 import ItemComments from "./ItemComments";
 import StepTicks from "./StepTicks";
+import ExtraItems from "./ExtraItems";
 import { useRealtime, useRefreshing } from "@/lib/realtime";
 import { NONE } from "./clientUi";
 import { DEFAULT_NOT_NEEDED, KIND_LABELS, stepsOf, tickedIn, ticksOf, type Entry, type Step, type Ticks } from "./OnboardingControls";
@@ -127,6 +129,7 @@ const STEP_ICONS: Record<string, LucideIcon> = {
   "step:google": MapPin,
   "step:social": Users,
   "step:media": Camera,
+  "step:extra": ListPlus,
 };
 // Each state's icon, and the tint of an item's icon in it.
 const STATE_ICONS: Record<Standing, LucideIcon> = { approved: CircleCheck, submitted: Inbox, todo: Clock, none: EyeOff };
@@ -237,19 +240,23 @@ export const filesOfKind = (onboarding: OnboardingAnswers | undefined, kind: Upl
 
 // One kind of the client's files, in edit mode: each shown as it is (a picture, a video that
 // plays, a link to anything else) with a way to take it off, and a button to add more.
-export const FileManager = ({
+// `kind: "extra"` with `extraKey`: the files of an item the team added ("Additional items").
+export const FileManager = <Kind extends UploadKind | "extra">({
   clientId,
   kind,
+  extraKey,
   title,
   files,
   onChange,
 }: {
   clientId: string;
-  kind: UploadKind;
+  kind: Kind;
+  extraKey?: string;
   title: string;
   files: OnboardingFile[];
-  onChange: (kind: UploadKind, files: OnboardingFile[]) => void;
+  onChange: (kind: Kind, files: OnboardingFile[]) => void;
 }) => {
+  const uploadPath = kind === "extra" ? `/onboarding/clients/${clientId}/extra-items/${extraKey}/files` : `/onboarding/clients/${clientId}/media/${kind}`;
   const picker = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -260,7 +267,7 @@ export const FileManager = ({
     const form = new FormData();
     Array.from(picked).forEach((file) => form.append("files", file));
     try {
-      const { status, body } = await sendToBackend<{ message?: string; data?: { files: OnboardingFile[] } }>("POST", `/onboarding/clients/${clientId}/media/${kind}`, form);
+      const { status, body } = await sendToBackend<{ message?: string; data?: { files: OnboardingFile[] } }>("POST", uploadPath, form);
       if (status < 200 || status >= 300 || !body?.data) return void toast.error(body?.message || uploadFailureMessage(status));
       onChange(kind, body.data.files);
       toast.success(picked.length === 1 ? "File uploaded" : "Files uploaded");
@@ -274,7 +281,7 @@ export const FileManager = ({
 
   const remove = async (file: OnboardingFile) => {
     setRemoving(file.url);
-    const result = await removeClientOnboardingFileAction(clientId, kind, file.url);
+    const result = kind === "extra" ? await removeExtraFileAction(clientId, extraKey ?? "", file.url) : await removeClientOnboardingFileAction(clientId, kind, file.url);
     setRemoving(null);
     if (!result.ok || !result.data) return void toast.error(result.error ?? "Couldn't remove the file.");
     onChange(kind, result.data.files);
@@ -286,7 +293,7 @@ export const FileManager = ({
         <span className="text-[11px] font-semibold tracking-[0.03em] text-[#6b7280] uppercase">
           {title} · {files.length}
         </span>
-        <input ref={picker} type="file" multiple hidden accept={ACCEPT[kind]} onChange={(event) => void upload(event.target.files)} />
+        <input ref={picker} type="file" multiple hidden accept={kind === "extra" ? undefined : ACCEPT[kind as UploadKind]} onChange={(event) => void upload(event.target.files)} />
         <button
           type="button"
           disabled={uploading}
@@ -560,6 +567,10 @@ const filesOf = (client: Client, itemId: string): { title: string; files: Onboar
       { title: "Style they'd like", files: onboarding?.logo?.styleFiles ?? [] },
     ].filter((group) => group.files.length);
   }
+  if (itemId.startsWith("extra.")) {
+    const files = onboarding?.extraItems?.[itemId.slice("extra.".length)]?.files ?? [];
+    return files.length ? [{ title: "Uploaded files", files }] : [];
+  }
   const kind = itemId.startsWith("media.") ? (itemId.slice("media.".length) as keyof NonNullable<NonNullable<typeof onboarding>["media"]>) : null;
   const files = kind ? (onboarding?.media?.[kind]?.files ?? []) : [];
   return files.length ? [{ title: "Uploaded files", files }] : [];
@@ -677,6 +688,11 @@ const OnboardingReview = ({
     const match = /^(social|google)\.(custom[A-Za-z]{8})$/.exec(itemId);
     return match ? { section: match[1] as CustomAccountSection, key: match[2] } : null;
   };
+  // The team's own items ("Additional items"), as the card above the steps changes them.
+  const saveExtraItems = (change: (items: Record<string, OnboardingExtraItem>) => Record<string, OnboardingExtraItem>) =>
+    setClient((now) => ({ ...now, onboarding: { ...(now.onboarding ?? { status: "in_progress" as const }), extraItems: change({ ...now.onboarding?.extraItems }) } }));
+  const saveExtraFiles = (key: string, files: OnboardingFile[]) =>
+    saveExtraItems((items) => (items[key] ? { ...items, [key]: { ...items[key], files } } : items));
   const saveAnswers = (onboarding: OnboardingAnswers) => setClient((now) => ({ ...now, onboarding: { ...now.onboarding, ...onboarding } }));
   const saveFiles = (kind: UploadKind, files: OnboardingFile[]) =>
     setClient((now) => {
@@ -685,7 +701,11 @@ const OnboardingReview = ({
       else onboarding.media = { ...onboarding.media, [kind]: { ...onboarding.media?.[kind], files } };
       return { ...now, onboarding };
     });
-  const steps = stepsOf({ contactName: client.contactName, companyName: client.companyName, email: client.email, phone: client.phone ?? "" }, client);
+  // Each item the team added is a step of its own here, under its title, as on the client's form;
+  // `key` tells the steps apart (they share the "Additional items" step's id, ticks and comments).
+  const steps: (Step & { key: string })[] = stepsOf({ contactName: client.contactName, companyName: client.companyName, email: client.email, phone: client.phone ?? "" }, client).flatMap((step) =>
+    step.id === "step:extra" ? step.items.map((item) => ({ ...step, key: item.id, title: item.name, items: [item] })) : [{ ...step, key: step.id }],
+  );
 
   // The team's ticks: what the client isn't asked, and what is approved. Each change is saved at
   // once; one that can't be saved is put back as it was.
@@ -771,9 +791,10 @@ const OnboardingReview = ({
       return next;
     });
 
+  const stepKeyOf = (step: Step) => (step as Step & { key?: string }).key ?? step.id;
   const matches = (standing: Standing, step: Step) =>
     section
-      ? step.id === section
+      ? stepKeyOf(step) === section
       : filter === "all"
         ? true
         : standing === filter;
@@ -833,7 +854,9 @@ const OnboardingReview = ({
     setApproved(latest.current.approved);
     setUpdateAsked((now) => ({ ...now, ...Object.fromEntries(ids.map((id) => [id, true])) }));
   };
-  const commentsOn = (step: Step) => comments.filter((comment) => `step:${comment.step}` === step.id);
+  // On a step that is one item the team added: the comments on that item, and on the step as a whole.
+  const commentsOn = (step: Step) =>
+    comments.filter((comment) => `step:${comment.step}` === step.id && (step.id !== "step:extra" || !comment.item || step.items.some((item) => item.id === comment.item)));
 
   const submittedAt = client.onboarding?.submittedAt
     ? new Date(client.onboarding.submittedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })
@@ -888,7 +911,16 @@ const OnboardingReview = ({
   // Which login a password field is: the item's own, or — on hosting with the website's login —
   // the hosting's or the website's.
   const passwordLoginOf = (entry: Entry, label: string) =>
-    label === "Login password" ? entry.id : label === "Hosting password" ? "hosting" : label === "Website password" ? "cms" : null;
+    label === "Login password"
+      ? entry.id
+      : label === "Hosting password"
+        ? "hosting"
+        : label === "Website password"
+          ? "cms"
+          : // A password an item the team added asks for on its own.
+            label === "Password" && entry.id.startsWith("extra.")
+            ? `${entry.id}.password`
+            : null;
 
   // Hosting with the website's login, simply: where it is hosted, what the site is built with, and
   // the way in they gave to each — the login itself, or whether the invite is done.
@@ -1110,6 +1142,9 @@ const OnboardingReview = ({
         />
       </div>
 
+      {/* ── The team's own items for this client: the "Additional items" step of their form ── */}
+      {canManage ? <ExtraItems clientId={client._id} items={client.onboarding?.extraItems ?? {}} stepOff={Boolean(off["step:extra"])} onChange={saveExtraItems} /> : null}
+
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         {/* ── The steps, and under them the comments on the client's form: on the right on a wide screen ── */}
         <div className="flex w-full flex-col gap-4 lg:order-last lg:w-75 lg:shrink-0">
@@ -1118,14 +1153,14 @@ const OnboardingReview = ({
             {onForm.map((step) => {
               const live = step.items.filter((item) => isOn(step, item));
               const ok = live.filter((item) => approved[item.id]).length;
-              const here = section === step.id;
+              const here = section === step.key;
               return (
                 <button
-                  key={step.id}
+                  key={step.key}
                   type="button"
                   aria-pressed={here}
                   onClick={() => {
-                    setSection(here ? null : step.id);
+                    setSection(here ? null : step.key);
                     setFilter("all");
                     if (!here) setOpen(new Set(step.items.map((item) => item.id)));
                   }}
@@ -1154,7 +1189,7 @@ const OnboardingReview = ({
               const stepStanding = stepStandingOf(step);
               const StepIcon = STEP_ICONS[step.id] ?? LayoutList;
               return (
-                <section key={step.id} className={`${cardClass} overflow-hidden`}>
+                <section key={step.key} className={`${cardClass} overflow-hidden`}>
                   {/* The step: its icon, name and state, and how much of it is approved. */}
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#f0f1f3] bg-[linear-gradient(180deg,#fcfcfd,#f8f9fb)] px-4.5 py-3.5">
                     <div className="flex min-w-0 items-center gap-3">
@@ -1276,6 +1311,12 @@ const OnboardingReview = ({
 
                           {isOpen ? (
                             <div className="flex flex-col gap-3.5 border-t border-[#f0f1f3] bg-[#fafbfc] px-4 py-4">
+                              {/* An item the team added: what they asked the client to do. */}
+                              {item.id.startsWith("extra.") && client.onboarding?.extraItems?.[item.id.slice("extra.".length)]?.description ? (
+                                <p className="m-0 rounded-[10px] border border-[#e0e7ff] bg-[#f5f8ff] px-3 py-2.5 text-[13px] whitespace-pre-line text-[#1e3a8a]">
+                                  {client.onboarding.extraItems[item.id.slice("extra.".length)].description}
+                                </p>
+                              ) : null}
                               {item.kind !== "empty" && entries.length === 1 ? (
                                 <div className="flex flex-wrap gap-1.5">
                                   <span className="rounded-full bg-white px-2.5 py-0.75 text-[12px] font-medium text-[#374151] ring-1 ring-[#e5e7eb]">{KIND_LABELS[item.kind]}</span>
@@ -1289,12 +1330,22 @@ const OnboardingReview = ({
                                   ))}
                                 </div>
                               ) : null}
-                              {answering && canManage && entries.some((entry) => editFieldsOf(entry.id).length) ? (
+                              {answering && canManage && item.id.startsWith("extra.") && client.onboarding?.extraItems?.[item.id.slice("extra.".length)]?.fields.includes("file") ? (
+                                <FileManager
+                                  clientId={client._id}
+                                  kind="extra"
+                                  extraKey={item.id.slice("extra.".length)}
+                                  title="Files"
+                                  files={client.onboarding?.extraItems?.[item.id.slice("extra.".length)]?.files ?? []}
+                                  onChange={(_, files) => saveExtraFiles(item.id.slice("extra.".length), files)}
+                                />
+                              ) : null}
+                              {answering && canManage && entries.some((entry) => editFieldsOf(entry.id, client.onboarding).length) ? (
                                 <ItemEditor
                                   key={`${item.id}-${entries.length}`}
                                   clientId={client._id}
                                   onboarding={client.onboarding}
-                                  fields={entries.flatMap((entry) => editFieldsOf(entry.id))}
+                                  fields={entries.flatMap((entry) => editFieldsOf(entry.id, client.onboarding))}
                                   onSaved={saveAnswers}
                                 />
                               ) : entries.length > 1 ? (

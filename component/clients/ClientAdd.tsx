@@ -78,7 +78,9 @@ import {
   uploadsOf,
 } from "./clientUi";
 import { FileManager, type UploadKind } from "./OnboardingReview";
-import type { OnboardingFile } from "@/app/actions/onboarding";
+import { addExtraItemAction, type OnboardingExtraItem, type OnboardingFile } from "@/app/actions/onboarding";
+import ExtraItems from "./ExtraItems";
+import SecondaryEmails from "./SecondaryEmails";
 import { ONBOARDING_STEPS } from "./StepTicks";
 import { DEFAULT_NOT_NEEDED, onboardingProgressOf, tickedIn, ticksOf } from "./OnboardingControls";
 
@@ -790,6 +792,9 @@ export const ClientForm = ({
   const [isPending, startTransition] = useTransition();
   const id = useId();
   const isEdit = Boolean(client);
+  // The team's own items for the client ("Additional items"). A new client's are kept here until
+  // the client is made, then sent (ExtraItems saves an existing client's at once).
+  const [extraItems, setExtraItems] = useState<Record<string, OnboardingExtraItem>>(() => client?.onboarding?.extraItems ?? {});
   // The part opened from its Edit: for a client being edited, and a part the form has.
   const only = client && onlyAsked && onlyAsked >= 1 && onlyAsked <= SECTION_TITLES.length ? onlyAsked : undefined;
   // Which parts are open: the one asked for (and brought into view), or — for a new client — the
@@ -808,6 +813,8 @@ export const ClientForm = ({
   const [contactName, setContactName] = useState(client?.contactName ?? "");
   const [companyName, setCompanyName] = useState(client?.companyName ?? "");
   const [email, setEmail] = useState(client?.email ?? "");
+  // More addresses of the client's, each copied on every email to `email`.
+  const [secondaryEmails, setSecondaryEmails] = useState<string[]>(() => client?.secondaryEmails ?? []);
   const [phone, setPhone] = useState(client?.phone ?? "");
   const [address, setAddress] = useState(client?.address ?? "");
   // Until the team says otherwise: the way the client asked to be reached, if they said.
@@ -1051,6 +1058,8 @@ export const ClientForm = ({
       contactName,
       companyName,
       email,
+      // The primary email isn't one of its own others.
+      secondaryEmails: secondaryEmails.filter((entry) => entry !== email.trim().toLowerCase()),
       phone,
       address,
       serviceTypes,
@@ -1084,6 +1093,15 @@ export const ClientForm = ({
       }
 
       const savedId = client?._id ?? (result.data && "client" in result.data ? result.data.client._id : undefined);
+      // A new client's own items go on their form now that there is a client to put them on.
+      if (!client && savedId) {
+        let failed = 0;
+        for (const item of Object.values(extraItems)) {
+          const added = await addExtraItemAction(savedId, { title: item.title, description: item.description ?? "", fields: item.fields });
+          if (!added.ok) failed += 1;
+        }
+        if (failed) toast.error(`${failed} additional item${failed === 1 ? "" : "s"} couldn't be saved — add ${failed === 1 ? "it" : "them"} again on the onboarding page.`, { duration: 8000 });
+      }
       // On the way to a part's own page, the save is quiet: the page itself is the next step.
       if (then && savedId) return router.push(then === "onboarding" ? `/clients/${savedId}/onboarding?edit=1` : `/services?client=${savedId}&edit=1&from=client`);
       if (client) {
@@ -1629,6 +1647,18 @@ export const ClientForm = ({
             busy={isPending && opening === "onboarding"}
           />
           ) : null}
+          {/* The team's own items for this client: the "Additional items" step of their form. For a
+              client being edited they are saved at once; for a new one, with the client. */}
+          {shows(4) ? (
+            <section className="mb-5 rounded-2xl border border-[#e2e8f0] bg-white px-6 py-5 shadow-[0_4px_16px_rgba(15,23,42,0.035)] max-[640px]:px-4.5">
+              <h2 className="text-[17px] leading-tight font-bold text-[#0f172a]">Additional items</h2>
+              <p className="mt-1 mb-4 text-[12.5px] text-[#64748b]">
+                Your own requirements for this client — each one shows as a step of its own on their onboarding form.
+                {client ? "" : " They are saved with the client."}
+              </p>
+              <ExtraItems clientId={client?._id} items={extraItems} stepOff={Boolean(notNeeded["step:extra"])} onChange={setExtraItems} />
+            </section>
+          ) : null}
 
           {/* 5. Account setup */}
           {shows(5) ? (
@@ -1786,6 +1816,14 @@ export const ClientForm = ({
               ) : (
                 <p className="text-[13px] text-[#334155]">{(client?.team ?? []).map((member) => (typeof member === "object" ? member.fullName : member)).join(", ") || "No one assigned yet"}</p>
               )}
+            </Field>
+
+            <Field
+              label="Secondary emails"
+              icon={Mail}
+              hint="Every email and notification sent to the primary email is copied to these too — except passwords and sign-in changes. Saved with the client."
+            >
+              <SecondaryEmails primary={email} emails={secondaryEmails} onChange={setSecondaryEmails} />
             </Field>
 
             {/* Their portal login as it is now: the password, hidden until shown, to copy. */}

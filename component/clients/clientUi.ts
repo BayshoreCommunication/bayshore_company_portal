@@ -1,7 +1,9 @@
 import type { Client, ClientSocial, ClientStatus } from "@/app/actions/clients";
 import type {
   OnboardingAccount,
+  ExtraField,
   OnboardingAnswers,
+  OnboardingExtraItem,
   OnboardingFile,
   OnboardingGoogleAccount,
   OnboardingMedia,
@@ -554,6 +556,43 @@ const mediaItem = (id: string, name: string, media: OnboardingMedia = {}): Item 
   };
 };
 
+// What an item the team added ("Additional items") can ask for, as the team picks it and the
+// client sees it.
+export const EXTRA_FIELDS: [ExtraField, string][] = [
+  ["info", "General information"],
+  ["login", "Login credentials"],
+  ["password", "Passwords"],
+  ["link", "Upload link"],
+  ["file", "File upload"],
+];
+
+// An item the team added, by its key: given once everything it asks for is.
+const extraItem = (key: string, entry: OnboardingExtraItem): Item => {
+  const saved = (sealed?: string, set?: boolean) => (sealed || set ? "Saved (encrypted)" : NONE);
+  const details: Item["details"] = entry.fields.flatMap((field): Item["details"] => {
+    switch (field) {
+      case "info":
+        return [["Information", written(entry.info)]];
+      case "login":
+        return [
+          ["Login username", written(entry.loginUsername)],
+          ["Login password", saved(entry.loginPassword, entry.loginPasswordSet)],
+        ];
+      case "password":
+        return [["Password", saved(entry.password, entry.passwordSet)]];
+      case "link":
+        return [["Link", written(entry.link)]];
+      case "file":
+        return [["Uploaded", entry.files?.length ? `${entry.files.length} file${entry.files.length === 1 ? "" : "s"}` : NONE]];
+      default:
+        return [];
+    }
+  });
+  const given = details.filter(([, value]) => value !== NONE).length;
+  const standing: Standing = !given ? NOT_ANSWERED : given === details.length ? ["Everything given", "ready"] : ["Partly given", "waiting"];
+  return { id: key, name: entry.title, label: standing[0], tone: standing[1], details };
+};
+
 const GOOGLE_NAMES: Record<OnboardingGoogleAccount, string> = {
   businessProfile: "Google Business Profile",
   analytics: "Google Analytics",
@@ -759,6 +798,10 @@ export const groupsOf = ({ onboarding }: Pick<OnboardingRequest, "onboarding">):
       ],
     },
     { id: "media", title: "Photos and videos", items: namesOf(MEDIA_NAMES).map(([key, name]) => mediaItem(key, name, onboarding.media?.[key])) },
+    // The team's own items for this client, when there are any.
+    ...(Object.keys(onboarding.extraItems ?? {}).length
+      ? [{ id: "extra", title: "Additional items", items: Object.entries(onboarding.extraItems ?? {}).map(([key, entry]) => extraItem(key, entry)) }]
+      : []),
   ];
 };
 
@@ -769,6 +812,7 @@ export const uploadsOf = (onboarding?: OnboardingAnswers): { title: string; file
     { title: "Logo", files: onboarding?.logo?.files ?? [] },
     { title: "Logo style references", files: onboarding?.logo?.styleFiles ?? [] },
     ...namesOf(MEDIA_NAMES).map(([key, title]) => ({ title, files: onboarding?.media?.[key]?.files ?? [] })),
+    ...Object.values(onboarding?.extraItems ?? {}).map((entry) => ({ title: entry.title, files: entry.files ?? [] })),
   ].filter((group) => group.files.length);
 
 // What a client says in the steps they go through right after signing up (client-portal:

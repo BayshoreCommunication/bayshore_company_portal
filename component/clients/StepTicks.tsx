@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, Check, Globe, Lock, Mail, MapPin, Palette, Server, User, Users, type LucideIcon } from "lucide-react";
+import { Camera, Check, Globe, ListPlus, Lock, Mail, MapPin, Palette, Server, User, Users, type LucideIcon } from "lucide-react";
 import type { Ticks } from "./OnboardingControls";
 
 // The steps of a client's onboarding form, each with a tick: ticked, the client sees it and fills
@@ -16,6 +16,8 @@ export const ONBOARDING_STEPS: [id: string, title: string, icon: LucideIcon, loc
   ["step:google", "Google accounts", MapPin],
   ["step:social", "Social media", Users],
   ["step:media", "Photos and videos", Camera],
+  // The team's own items for this client (OnboardingReview → ExtraItems); asked only when there are some.
+  ["step:extra", "Additional items", ListPlus],
 ];
 
 // One line of steps: each a small tick to click, the count beside them. On the client's form:

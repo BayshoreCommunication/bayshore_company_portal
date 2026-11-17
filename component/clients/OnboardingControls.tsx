@@ -40,7 +40,7 @@ export const onboardingProgressOf = (client: Pick<Client, "onboarding" | "contac
   const notNeeded = new Set(client.onboarding?.notNeeded ?? DEFAULT_NOT_NEEDED);
   const items = groupsOf({ onboarding: client.onboarding ?? { status: "in_progress" } })
     .filter((group) => !notNeeded.has(`step:${group.id}`))
-    .flatMap((group) => group.items.map((item) => ({ item, id: ["google", "social", "media"].includes(group.id) ? `${group.id}.${item.id}` : item.id })))
+    .flatMap((group) => group.items.map((item) => ({ item, id: ["google", "social", "media", "extra"].includes(group.id) ? `${group.id}.${item.id}` : item.id })))
     .filter(({ id }) => !notNeeded.has(id));
   // Who they are ("Your details"): always asked, and filled in once their name, company and email are.
   const contactDone = Boolean(client.contactName?.trim() && client.companyName?.trim() && client.email?.trim());
@@ -56,7 +56,7 @@ export const tickedIn = (ticks: Ticks) => Object.keys(ticks).filter((id) => tick
 
 // The steps whose items are kept by name under the step's own (onboarding.google.ads): their
 // ids carry it, so that the business email and the email login don't share one.
-const NAMED_UNDER_STEP = ["google", "social", "media"];
+const NAMED_UNDER_STEP = ["google", "social", "media", "extra"];
 
 export const KIND_LABELS: Record<Kind, string> = { login: "Login & password", invite: "Access invite", link: "Link", files: "Files", details: "Details", help: "Needs help", empty: "Nothing yet" };
 

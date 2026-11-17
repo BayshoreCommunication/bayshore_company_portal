@@ -112,6 +112,8 @@ export interface Client {
   contactName: string;
   companyName: string;
   email: string;
+  // More addresses of the client's own: each gets a copy of every email sent to `email`.
+  secondaryEmails?: string[];
   phone?: string;
   address?: string;
   serviceTypes: string[];
@@ -161,6 +163,7 @@ export interface ClientInput {
   contactName: string;
   companyName: string;
   email: string;
+  secondaryEmails?: string[];
   phone?: string;
   address?: string;
   serviceTypes: string[];

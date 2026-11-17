@@ -76,7 +76,33 @@ const emailAccount = (path: string): FieldDef[] => [
   { path: `${path}.loginPassword`, label: "Password", kind: "password", hint: "Only to change it. Stored encrypted." },
 ];
 
-export const fieldsOf = (itemId: string): FieldDef[] => {
+// An item the team added ("extra.customAbc…"): what it asks for, as the team ticked it. Its files
+// are managed beside these (OnboardingReview → FileManager).
+const extraItem = (key: string, onboarding?: OnboardingAnswers): FieldDef[] => {
+  const asks = onboarding?.extraItems?.[key]?.fields ?? [];
+  const path = `extraItems.${key}`;
+  return asks.flatMap((field): FieldDef[] => {
+    switch (field) {
+      case "info":
+        return [{ path: `${path}.info`, label: "Information", kind: "textarea", wide: true }];
+      case "login":
+        return [
+          { path: `${path}.loginUsername`, label: "Login username", kind: "text" },
+          { path: `${path}.loginPassword`, label: "Login password", kind: "password", hint: "Only to change it. Stored encrypted." },
+        ];
+      case "password":
+        return [{ path: `${path}.password`, label: "Password", kind: "password", hint: "Only to change it. Stored encrypted." }];
+      case "link":
+        return [{ path: `${path}.link`, label: "Link", kind: "text" }];
+      default:
+        return [];
+    }
+  });
+};
+
+// `onboarding`: the client's answers — what an item the team added asks for is kept there.
+export const fieldsOf = (itemId: string, onboarding?: OnboardingAnswers): FieldDef[] => {
+  if (itemId.startsWith("extra.")) return extraItem(itemId.slice("extra.".length), onboarding);
   if (itemId === "social.email") return emailAccount(itemId);
   // An account the team added ("social.customAbc…", "google.customAbc…"): kept apart, and either
   // given by an invite to our access email or by its login — as a Google account is.
@@ -237,6 +263,13 @@ export const answersFrom = (onboarding: OnboardingAnswers | undefined, fields: F
           delete entry.loginPassword;
           delete entry.loginPasswordSet;
         }
+      }
+    }
+    // The team's own items: neither of their sealed passwords goes back, nor their files.
+    if (section === "extraItems") {
+      for (const entry of Object.values(copy)) {
+        if (!isPlain(entry)) continue;
+        for (const key of ["loginPassword", "loginPasswordSet", "password", "passwordSet", "files"]) delete entry[key];
       }
     }
     // A platform's own login: the stored (sealed) password never goes back either.

@@ -25,6 +25,7 @@ const STEPS: [id: string, title: string][] = [
   ["google", "Google accounts"],
   ["social", "Social media"],
   ["media", "Photos and videos"],
+  ["extra", "Additional items"],
 ];
 const titleOf = (step: string) => STEPS.find(([id]) => id === step)?.[1] ?? step;
 

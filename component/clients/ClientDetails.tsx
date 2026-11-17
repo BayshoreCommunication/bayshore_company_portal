@@ -8,6 +8,7 @@ import { PasswordEye } from "@/component/shared/PasswordModal";
 import { Thread as ClientThread } from "@/component/messages/Messages";
 import toast from "react-hot-toast";
 import {
+  ListPlus,
   AlertTriangle,
   ArrowRight,
   ArrowUpRight,
@@ -573,7 +574,8 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
   const goals = client.onboarding?.goals;
   // What the client answered on the onboarding form, by the form's own steps — for where the
   // onboarding stands. The answers themselves are on the onboarding page (OnboardingTransfer).
-  const [site, domains, mail, brand, google, social, media] = groupsOf({ onboarding: client.onboarding ?? { status: "in_progress" } });
+  // `extra`: the team's own items ("Additional items"), when there are any.
+  const [site, domains, mail, brand, google, social, media, extra] = groupsOf({ onboarding: client.onboarding ?? { status: "in_progress" } });
 
   const answered = client.onboarding;
 
@@ -711,6 +713,14 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
   ];
   const accountRows: Row[] = [
     { icon: UserCog, label: "Account manager", value: manager },
+    // More addresses of the client's: each gets a copy of every email sent to the primary one.
+    {
+      icon: Mail,
+      label: "Secondary emails",
+      value: client.secondaryEmails?.length ? client.secondaryEmails.join(", ") : "None added",
+      tone: client.secondaryEmails?.length ? undefined : "none",
+      content: client.secondaryEmails?.length ? <EmailList emails={client.secondaryEmails} /> : undefined,
+    },
     // The portal password — only ever sent to those who manage clients (who get the edit link).
     {
       icon: Lock,
@@ -754,9 +764,9 @@ const RecordSections = ({ client, editHref, manager, team }: { client: Client; e
   // of it is approved, and what is still waiting on them or needs our help.
   const notNeeded = new Set(client.onboarding?.notNeeded ?? DEFAULT_NOT_NEEDED);
   const approvedIds = new Set(client.onboarding?.approved ?? []);
-  const asked = [site, domains, mail, brand, google, social, media]
+  const asked = [site, domains, mail, brand, google, social, media, ...(extra ? [extra] : [])]
     .filter((group) => !notNeeded.has(`step:${group.id}`))
-    .flatMap((group) => group.items.map((item) => ({ item, id: ["google", "social", "media"].includes(group.id) ? `${group.id}.${item.id}` : item.id })))
+    .flatMap((group) => group.items.map((item) => ({ item, id: ["google", "social", "media", "extra"].includes(group.id) ? `${group.id}.${item.id}` : item.id })))
     .filter(({ id }) => !notNeeded.has(id));
   // Who the client is ("contact") is always asked.
   const askedCount = asked.length + 1;
@@ -901,8 +911,9 @@ export const OnboardingTransfer = ({ client, answers = true }: { client: Client;
     : undefined;
   // What the client answered on the onboarding form, by the form's own steps — once they have
   // answered any of it.
-  const [site, domains, mail, brand, google, social, media] = groupsOf({ onboarding: client.onboarding ?? { status: "in_progress" } });
-  const answeredAny = answers && [site, domains, mail, brand, google, social, media].some((group) => group.items.some(isAnswered));
+  // `extra`: the team's own items ("Additional items"), when there are any.
+  const [site, domains, mail, brand, google, social, media, extra] = groupsOf({ onboarding: client.onboarding ?? { status: "in_progress" } });
+  const answeredAny = answers && [site, domains, mail, brand, google, social, media, ...(extra ? [extra] : [])].some((group) => group.items.some(isAnswered));
   const uploads = answers ? uploadsOf(client.onboarding) : [];
 
   return (
@@ -926,6 +937,12 @@ export const OnboardingTransfer = ({ client, answers = true }: { client: Client;
           <Rows rows={[...social.items.map((item) => answerRow(item, Link2)), ...(metaAdsRow ? [metaAdsRow] : [])]} />
           <Subhead>Photos and videos — from the client</Subhead>
           <Rows rows={media.items.map((item) => answerRow(item, Camera))} />
+          {extra ? (
+            <>
+              <Subhead>Additional items — from the client</Subhead>
+              <Rows rows={extra.items.map((item) => ({ ...answerRow(item, ListPlus), wide: true }))} />
+            </>
+          ) : null}
         </>
       ) : null}
       {uploads.length ? (
@@ -1251,6 +1268,18 @@ const LOGIN_STATUS_LABEL: Record<ClientLogin["status"], string> = {
   blocked: "Blocked",
 };
 
+// The client's secondary emails, one to a line.
+// (A div: the "Portal Access" table greys a span beside its label.)
+const EmailList = ({ emails, className = "" }: { emails: string[]; className?: string }) => (
+  <div className="flex min-w-0 flex-col gap-0.5">
+    {emails.map((email) => (
+      <span key={email} className={`truncate ${className}`} title={email}>
+        {email}
+      </span>
+    ))}
+  </div>
+);
+
 // The portal password, hidden behind dots until the eye is clicked, with a button to copy it.
 // The portal password: the eye shows it, the copy button copies it (PasswordEye).
 const PasswordValue = ({ clientId }: { clientId: string }) => (
@@ -1402,6 +1431,10 @@ const ClientDetails = ({
                   <div>
                     <span>Sign-in email</span>
                     <Value>{login.email}</Value>
+                  </div>
+                  <div>
+                    <span>Secondary emails</span>
+                    {client.secondaryEmails?.length ? <EmailList emails={client.secondaryEmails} className="font-bold text-[#17242f]" /> : <b className="font-medium! text-[#a3b1ba]!">None added</b>}
                   </div>
                   {canManage ? (
                     <div>

@@ -133,7 +133,29 @@ export interface OnboardingAnswers {
   socialCustom?: Record<string, OnboardingCustomAccount>;
   // The same on the Google step ("google.<key>").
   googleCustom?: Record<string, OnboardingCustomAccount>;
+  // The team's own items for this client ("Additional items"), by key: the item "extra.<key>".
+  extraItems?: Record<string, OnboardingExtraItem>;
   media?: Partial<Record<OnboardingMediaKind, OnboardingMedia>>;
+}
+
+// What an item the team added asks for: general information, a login, a password on its own, a
+// link, files (their names: clientUi.ts → EXTRA_FIELDS).
+export type ExtraField = "info" | "login" | "password" | "link" | "file";
+
+// An item the team added to a client's "Additional items" step, with the client's answers. A
+// password is kept sealed: here it only says that there is one.
+export interface OnboardingExtraItem {
+  title: string;
+  description?: string;
+  fields: ExtraField[];
+  info?: string;
+  link?: string;
+  loginUsername?: string;
+  loginPassword?: string;
+  loginPasswordSet?: boolean;
+  password?: string;
+  passwordSet?: boolean;
+  files?: OnboardingFile[];
 }
 
 export interface OnboardingCustomAccount extends OnboardingAccount {
@@ -373,4 +395,44 @@ export async function removeClientOnboardingFileAction(clientId: string, kind: s
   } catch {
     return NETWORK_ERROR;
   }
+}
+
+// An item of the team's own on a client's "Additional items" step — added, changed, or taken off
+// with its answers and files (backend: /onboarding/clients/:clientId/extra-items). The client's
+// form hears of it at once.
+export type ExtraItemInput = { title: string; description: string; fields: ExtraField[] };
+export type ExtraItemView = ExtraItemInput & { key: string };
+
+async function sendExtra<T>(clientId: string, method: "POST" | "PATCH" | "DELETE", path: string, body: unknown, fallback: string): Promise<OnboardingActionResult<T>> {
+  const accessToken = await token();
+  if (!accessToken) return NOT_SIGNED_IN;
+  try {
+    const response = await fetch(`${BACKEND_API_URL}/onboarding/clients/${clientId}/extra-items${path}`, {
+      method,
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    if (!response.ok) return failure(response, fallback);
+    const { data } = (await response.json()) as { data: T };
+    return { ok: true, data };
+  } catch {
+    return NETWORK_ERROR;
+  }
+}
+
+export async function addExtraItemAction(clientId: string, item: ExtraItemInput) {
+  return sendExtra<ExtraItemView>(clientId, "POST", "", item, "Couldn't add the item.");
+}
+
+export async function updateExtraItemAction(clientId: string, key: string, item: ExtraItemInput) {
+  return sendExtra<ExtraItemView>(clientId, "PATCH", `/${encodeURIComponent(key)}`, item, "Couldn't save the item.");
+}
+
+export async function removeExtraItemAction(clientId: string, key: string) {
+  return sendExtra<null>(clientId, "DELETE", `/${encodeURIComponent(key)}`, undefined, "Couldn't take the item off.");
+}
+
+// One of an item's files taken off by the team. Back come the files left.
+export async function removeExtraFileAction(clientId: string, key: string, url: string) {
+  return sendExtra<{ files: OnboardingFile[] }>(clientId, "DELETE", `/${encodeURIComponent(key)}/files`, { url }, "Couldn't remove the file.");
 }
