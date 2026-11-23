@@ -100,6 +100,8 @@ export interface ProjectFieldsInput {
 export interface ProjectInput extends ProjectFieldsInput {
   client: string;
   name: string;
+  // Task manager user ids to assign the mirrored project's starter task to.
+  assignees?: string[];
 }
 
 // Editing sends only what changes; the client can't be changed. `removeFiles`

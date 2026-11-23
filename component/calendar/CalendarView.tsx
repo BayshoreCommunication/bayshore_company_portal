@@ -900,6 +900,19 @@ const Dialog = ({ label, onClose, children }: { label: string; onClose: () => vo
   );
 };
 
+// Initials for a guest avatar — from their name, or the first letters of their email.
+const initialsOf = (value = "") => {
+  const name = value.includes("@") ? value.split("@")[0].replace(/[._-]+/g, " ") : value;
+  return (
+    name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word[0]?.toUpperCase())
+      .join("") || "?"
+  );
+};
+
 const GUEST_STATUS: Record<string, { label: string; icon: React.ReactNode; className: string }> = {
   accepted: { label: "Going", icon: <Check size={11} strokeWidth={3} />, className: "bg-[#dcfce7] text-[#15803d]" },
   declined: { label: "Not going", icon: <X size={11} strokeWidth={3} />, className: "bg-[#fee2e2] text-[#b91c1c]" },
@@ -977,7 +990,7 @@ const EventDialog = ({
       ) : null}
     </div>
 
-    <div className="mt-5 flex flex-col gap-3 text-[12.5px] text-[#334155]">
+    <div className="mt-5 flex flex-col gap-3.5 border-t border-[#eef2f7] pt-4 text-[12.5px] text-[#334155]">
       {event.location ? (
         <div className="flex items-start gap-2.5">
           <MapPin size={14} strokeWidth={2} className="mt-0.5 shrink-0 text-[#94a3b8]" />
@@ -991,13 +1004,14 @@ const EventDialog = ({
       {event.guests.length ? (
         <div className="flex items-start gap-2.5">
           <Users size={14} strokeWidth={2} className="mt-0.5 shrink-0 text-[#94a3b8]" />
-          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="flex min-w-0 flex-1 flex-col gap-2.5">
             <span className="font-semibold text-[#1f2530]">{event.guests.length === 1 ? "1 guest" : `${event.guests.length} guests`}</span>
             {event.guests.map((guest) => {
               const status = GUEST_STATUS[guest.status ?? ""];
               return (
-                <div key={guest.email} className="flex items-center justify-between gap-2">
-                  <div className="min-w-0">
+                <div key={guest.email} className="flex items-center gap-2.5">
+                  <span className="grid size-7 shrink-0 place-items-center rounded-full bg-[#eef2f7] text-[10px] font-bold text-[#64748b]">{initialsOf(guest.name || guest.email)}</span>
+                  <div className="min-w-0 flex-1">
                     <div className="truncate font-medium text-[#1f2530]">
                       {guest.name || guest.email}
                       {guest.organizer ? <span className="ml-1.5 text-[11px] font-normal text-[#94a3b8]">Organizer</span> : null}

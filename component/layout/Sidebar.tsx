@@ -4,6 +4,7 @@ import {
   Bell,
   Briefcase,
   Calendar,
+  CalendarClock,
   CreditCard,
   FileText,
   Layers,
@@ -51,6 +52,7 @@ const NAV_SECTIONS: NavSection[] = [
     heading: "Workspace",
     items: [
       { label: "Calendar", icon: Calendar, href: "/calendar" },
+      { label: "Meetings", icon: CalendarClock, href: "/meetings" },
       { label: "Messages", icon: MessageSquare, href: "/messages" },
       { label: "Payments", icon: CreditCard, href: "/payments" },
     ],

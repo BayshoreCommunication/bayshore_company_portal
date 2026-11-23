@@ -79,7 +79,7 @@ const Topbar = ({ user }: { user: TopbarUser }) => {
           </button>
 
           <div className="invisible absolute top-[calc(100%+8px)] right-0 z-40 flex w-50 -translate-y-1 flex-col gap-0.5 rounded-[10px] border border-[#e2e5e9] bg-white p-1.5 opacity-0 shadow-[0_10px_28px_rgba(15,23,42,0.14)] transition-all duration-150 ease-out group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
-            <Link href="/settings" className={`${itemClass} text-[#33434f] hover:bg-[#f3f4f6]`}>
+            <Link href="/profile" className={`${itemClass} text-[#33434f] hover:bg-[#f3f4f6]`}>
               <User size={14} strokeWidth={2} /> Profile
             </Link>
             <form action={signOutAction}>

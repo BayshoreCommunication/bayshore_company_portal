@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { sendToBackend } from "@/lib/sendToBackend";
 import { uploadFailureMessage } from "@/component/content/upload";
+import AssigneePicker from "@/component/projects/AssigneePicker";
 import { ArrowLeft, Eye, Flag, FolderKanban, Loader2, Paperclip, Plus, RotateCcw, Save, Trash2, X } from "lucide-react";
 import {
   createProjectAction,
@@ -198,6 +199,8 @@ const ProjectForm = ({
   const [targetDate, setTargetDate] = useState(targetDateInput(project?.targetDate));
   const [priority, setPriority] = useState<ProjectPriority>(project?.priority ?? "normal");
   const [status, setStatus] = useState<ProjectStatus>(project?.status ?? "new");
+  // Only for a new project: the task manager team to assign its mirrored starter task to.
+  const [assignees, setAssignees] = useState<string[]>([]);
   // Files already on the project stay listed; the ones marked here go when saved.
   const [removedUrls, setRemovedUrls] = useState<string[]>([]);
   const [newFiles, setNewFiles] = useState<File[]>([]);
@@ -268,13 +271,14 @@ const ProjectForm = ({
       for (const [key, value] of Object.entries(fields)) form.append(key, value);
       for (const url of removedUrls) form.append("removeFiles", url);
       for (const file of newFiles) form.append("files", file);
+      if (!project) for (const id of assignees) form.append("assignees", id);
       outcome = project
         ? await sendWithFiles(`/projects/${project._id}`, "PATCH", form, ["/projects", `/projects/${project._id}/edit`])
         : await sendWithFiles("/projects", "POST", form, ["/projects"]);
     } else {
       outcome = project
         ? await updateProjectAction(project._id, { ...fields, removeFiles: removedUrls })
-        : await createProjectAction({ ...fields, client });
+        : await createProjectAction({ ...fields, client, assignees });
     }
 
     if (!outcome.ok) {
@@ -367,7 +371,7 @@ const ProjectForm = ({
             <div className={rowClass}>
               <div>
                 <label className={labelClass} htmlFor="project-target">
-                  Target Completion
+                  Due Date
                 </label>
                 <input
                   id="project-target"
@@ -412,6 +416,12 @@ const ProjectForm = ({
                 </select>
               </div>
             </div>
+
+            {!project ? (
+              <div>
+                <AssigneePicker value={assignees} onChange={setAssignees} />
+              </div>
+            ) : null}
 
             <div>
               <div className={labelClass}>
@@ -556,7 +566,7 @@ const ProjectForm = ({
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[#6b7280]">Target date</span>
+                <span className="text-[#6b7280]">Due Date</span>
                 <span className="font-medium text-[#1f2530]">{formatTargetDate(targetDate) || "—"}</span>
               </div>
               <div className="flex items-center justify-between gap-2">

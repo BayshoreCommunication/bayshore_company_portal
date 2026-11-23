@@ -36,18 +36,19 @@ const ClientRows = ({
   today,
   canWrite,
   statusOf,
-  startOpen,
+  open,
+  onToggle,
 }: {
   group: ClientProjects;
   today: string;
   canWrite: boolean;
   statusOf: (project: Project) => ReactNode;
-  startOpen: boolean;
+  open: boolean;
+  onToggle: () => void;
 }) => {
-  const [open, setOpen] = useState(startOpen);
   const { client, counts, overdue, nextDue, projects } = group;
   const share = counts.total ? Math.round((counts.completed / counts.total) * 100) : 0;
-  const toggle = () => setOpen((shown) => !shown);
+  const toggle = onToggle;
 
   return (
     <tbody>
@@ -173,8 +174,10 @@ const ProjectsByClient = ({
   statusOf: (project: Project) => ReactNode;
   // Shown when no client has a project that matches.
   empty: ReactNode;
-}) =>
-  groups.length ? (
+}) => {
+  // Accordion: one client open at a time — the first to begin with.
+  const [openId, setOpenId] = useState<string | null>(groups[0]?.client._id ?? null);
+  return groups.length ? (
     <div className={`${cardClass} overflow-x-auto`}>
       {/* One table: the columns once, then each client and its projects. */}
       <table className="w-full min-w-190 border-separate border-spacing-0">
@@ -191,13 +194,22 @@ const ProjectsByClient = ({
           </tr>
         </thead>
         {/* A few open to begin with; the rest a click away. */}
-        {groups.map((group, index) => (
-          <ClientRows key={group.client._id} group={group} today={today} canWrite={canWrite} statusOf={statusOf} startOpen={groups.length <= 3 || index < 2} />
+        {groups.map((group) => (
+          <ClientRows
+            key={group.client._id}
+            group={group}
+            today={today}
+            canWrite={canWrite}
+            statusOf={statusOf}
+            open={openId === group.client._id}
+            onToggle={() => setOpenId((current) => (current === group.client._id ? null : group.client._id))}
+          />
         ))}
       </table>
     </div>
   ) : (
     <div className={cardClass}>{empty}</div>
   );
+};
 
 export default ProjectsByClient;

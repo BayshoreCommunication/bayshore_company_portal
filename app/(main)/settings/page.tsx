@@ -1,18 +1,14 @@
-import { getMyProfileAction } from "@/app/actions/profile";
-import SettingsDetails from "@/component/settings/SettingsDetails";
-import { formErrorBanner } from "@/component/shared/ui";
+import { getTeamOverviewAction } from "@/app/actions/team";
+import TeamOverview from "@/component/settings/TeamOverview";
 
-// The signed-in team member's profile.
+// The team overview — each member with this month's KPI score. Profile lives on /profile now.
 const SettingsPage = async () => {
-  const profile = await getMyProfileAction();
-  if (!profile) {
-    return (
-      <div className={formErrorBanner} role="alert">
-        Could not load your profile. Please refresh the page to try again.
-      </div>
-    );
-  }
-  return <SettingsDetails profile={profile} />;
+  const team = await getTeamOverviewAction();
+  return (
+    <div className="flex flex-col gap-5">
+      <TeamOverview members={team.ok ? team.members : undefined} error={team.ok ? undefined : team.error} />
+    </div>
+  );
 };
 
 export default SettingsPage;
